@@ -1,0 +1,17 @@
+{
+  "mcpServers": {
+    "firebase": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "firebase-tools@latest",
+        "mcp",
+        "--dir",
+        "C:\\Users\\anonw\\Desktop\\DOUBLE_CHECK\\doublecheck",
+        "--only",
+        "auth,firestore,storage,functions"
+      ]
+    }
+  }
+}
+

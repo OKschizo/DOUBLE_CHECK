@@ -1,0 +1,70 @@
+# Dependencies
+node_modules
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Next.js
+.next
+out
+
+# Testing
+coverage
+.nyc_output
+
+# Misc
+.DS_Store
+*.pem
+.env
+.env.*
+!.env.example
+*.log
+
+# Debug
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Vercel
+.vercel
+
+# Typescript
+*.tsbuildinfo
+next-env.d.ts
+
+# IDE
+.vscode
+.idea
+*.swp
+*.swo
+*~
+
+# Git
+.git
+.gitignore
+.gitattributes
+
+# Firebase
+firebase-debug.log
+firestore-debug.log
+ui-debug.log
+firebase.json
+.firebaserc
+
+# Documentation
+README.md
+*.md
+!env.example
+
+# PDFs and Images (except public assets)
+*.pdf
+555.png
+doublecheck33.png
+logo_dark.png
+logo_light.png
+
+# Service Account Keys (important!)
+*-firebase-adminsdk-*.json
+doublecheck-9f8c1-firebase-adminsdk-*.json
+

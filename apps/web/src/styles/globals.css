@@ -1,0 +1,209 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* Default theme values - will be overridden by ThemeProvider */
+    --background-primary: 0 0 0;
+    --background-secondary: 0 0 0;
+    --background-tertiary: 0 0 0;
+    --background-elevated: 5 5 5;
+    
+    --text-primary: 255 255 255;
+    --text-secondary: 200 200 200;
+    --text-tertiary: 150 150 150;
+    
+    --accent-primary: 181 255 0;
+    --accent-secondary: 218 255 128;
+    --accent-hover: 200 240 0;
+    --accent-focus: 160 220 0;
+    
+    --border-subtle: 10 10 10;
+    --border-default: 20 20 20;
+    --border-emphasis: 30 30 30;
+    
+    --error: 239 68 68;
+    --success: 16 185 129;
+    --warning: 245 158 11;
+    --info: 59 130 246;
+    
+    --shadow-color: 0 0 0;
+    --theme-gradient: none;
+    --button-text-on-accent: 255 255 255; /* Default to white */
+    --colored-button-text: 255 255 255; /* Default to white */
+  }
+  
+  body {
+    @apply antialiased;
+    background-color: rgb(var(--background-primary));
+    color: rgb(var(--text-primary));
+    font-family: 'Space Grotesk', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+    letter-spacing: -0.011em;
+    position: relative;
+  }
+  
+  body::before {
+    content: '';
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: var(--theme-gradient, none);
+    pointer-events: none;
+    z-index: 0;
+    opacity: 1;
+  }
+  
+  body > div {
+    position: relative;
+    z-index: 1;
+  }
+  
+  * {
+    @apply border-border-subtle;
+  }
+}
+
+@layer components {
+  /* Card Styles - Auto Finance inspired */
+  .card {
+    @apply bg-background-primary border border-border-subtle;
+    border-radius: 0px;
+    transition: all 0.2s ease;
+  }
+  
+  .card-elevated {
+    @apply bg-background-primary border border-border-default;
+    border-radius: 0px;
+    transition: all 0.2s ease;
+  }
+  
+  .card-hover {
+    @apply transition-all duration-200;
+    border-radius: 0px;
+  }
+  
+  .card-hover:hover {
+    border-color: rgb(var(--accent-primary) / 0.3);
+    box-shadow: 0 0 0 1px rgb(var(--accent-primary) / 0.1);
+  }
+  
+  /* Button Styles - Auto Finance inspired */
+  .btn-primary {
+    @apply px-4 py-2 font-bold transition-all duration-200;
+    @apply bg-accent-primary hover:bg-accent-hover;
+    @apply active:scale-95;
+    color: rgb(var(--button-text-on-accent, 255 255 255));
+    border-radius: 0px;
+    font-size: 14px;
+    font-weight: 700;
+  }
+  
+  .btn-secondary {
+    @apply px-4 py-2 font-medium transition-all duration-200;
+    @apply bg-background-primary text-accent-secondary;
+    @apply border border-border-default hover:border-accent-primary;
+    @apply hover:bg-accent-primary/5 active:scale-95;
+    border-radius: 0px;
+    font-size: 16px;
+    font-weight: 400;
+  }
+  
+  /* Input Styles - Auto Finance inspired */
+  .input-field {
+    @apply w-full px-4 py-3 transition-all duration-200;
+    @apply bg-background-primary border border-border-default;
+    @apply text-text-primary placeholder:text-text-tertiary;
+    @apply focus:outline-none focus:ring-2 focus:ring-accent-primary focus:border-accent-primary;
+    border-radius: 0px;
+  }
+  
+  .input-field:hover {
+    border-color: rgb(var(--border-emphasis));
+  }
+  
+  /* Badge Styles */
+  .badge {
+    @apply px-3 py-1 rounded-full text-xs font-medium;
+  }
+  
+  .badge-primary {
+    @apply bg-accent-primary/20 text-accent-secondary border border-accent-primary/30;
+  }
+  
+  .badge-success {
+    @apply bg-success/20 text-success border border-success/30;
+  }
+  
+  .badge-warning {
+    @apply bg-warning/20 text-warning border border-warning/30;
+  }
+  
+  .badge-error {
+    @apply bg-error/20 text-error border border-error/30;
+  }
+}
+
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+  
+  .gradient-primary {
+    background: linear-gradient(135deg, rgb(var(--accent-primary)) 0%, rgb(var(--accent-secondary)) 100%);
+  }
+  
+  .gradient-accent {
+    background: linear-gradient(135deg, #EC4899 0%, rgb(var(--accent-primary)) 100%);
+  }
+  
+  /* Hover utilities for deep black theme */
+  .hover-accent {
+    @apply transition-all duration-200;
+  }
+  
+  .hover-accent:hover {
+    background-color: rgb(var(--accent-primary) / 0.05);
+    border-color: rgb(var(--accent-primary) / 0.3);
+  }
+  
+  .hover-accent-strong {
+    @apply transition-all duration-200;
+  }
+  
+  .hover-accent-strong:hover {
+    background-color: rgb(var(--accent-primary) / 0.1);
+    border-color: rgb(var(--accent-primary) / 0.5);
+  }
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: rgb(var(--background-secondary));
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgb(var(--border-emphasis));
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgb(var(--text-tertiary));
+}
+
+/* Progress bar shimmer animation */
+@keyframes shimmer {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(100%);
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "projects": {
+    "default": "doublecheck-9f8c1"
+  },
+  "targets": {
+    "doublecheck-9f8c1": {
+      "hosting": {
+        "doublecheck22": [
+          "doublecheck22"
+        ]
+      }
+    }
+  }
+}

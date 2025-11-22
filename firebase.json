@@ -1,0 +1,24 @@
+{
+  "firestore": {
+    "indexes": "firestore.indexes.json",
+    "rules": "firestore.rules"
+  },
+  "storage": {
+    "rules": "storage.rules"
+  },
+  "hosting": {
+    "site": "doublecheck22",
+    "source": "apps/web",
+    "ignore": [
+      "firebase.json",
+      "**/.*",
+      "**/node_modules/**"
+    ],
+    "frameworksBackend": {
+      "region": "us-central1",
+      "maxInstances": 10,
+      "minInstances": 0,
+      "concurrency": 80
+    }
+  }
+}
