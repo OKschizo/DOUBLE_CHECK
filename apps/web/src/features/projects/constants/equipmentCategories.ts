@@ -1,4 +1,4 @@
-import { defaultEquipmentCategories } from '@doublecheck/schemas';
+import { defaultEquipmentCategories } from '@/lib/schemas';
 
 export const EQUIPMENT_CATEGORIES: Record<string, string> = {
   camera: 'Camera',

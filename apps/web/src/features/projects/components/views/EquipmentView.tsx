@@ -3,7 +3,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { trpc } from '@/lib/trpc/client';
 import { useAuth } from '@/features/auth/hooks/useAuth';
-import { Equipment, CheckoutHistory, EquipmentSource, EquipmentStatus } from '@doublecheck/schemas';
+import { Equipment, CheckoutHistory, EquipmentSource, EquipmentStatus } from '@/lib/schemas';
 import { uploadImage, deleteImage, generateUniqueFilename, isBlobUrl, isFirebaseStorageUrl } from '@/lib/firebase/storage';
 import { EQUIPMENT_CATEGORIES, getCategoryDisplayName, getAllCategories } from '@/features/projects/constants/equipmentCategories';
 import { useMyRole } from '@/features/projectMembers/hooks/useProjectMembers';

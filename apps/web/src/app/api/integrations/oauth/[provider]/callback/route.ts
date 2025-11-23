@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { env } from '@/lib/env';
-import { adminDb, FieldValue } from '@doublecheck/api';
+import { adminDb } from '@/lib/api/lib/firebase-admin';
+import { FieldValue } from '@/lib/api';
 
 export async function GET(
   request: NextRequest,

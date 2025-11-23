@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { trpc } from '@/lib/trpc/client';
-import type { ShootingDay } from '@doublecheck/schemas';
+import type { ShootingDay } from '@/lib/schemas';
 
 interface ShootingDayEditModalProps {
   shootingDay: ShootingDay | null;

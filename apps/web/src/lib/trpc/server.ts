@@ -1,4 +1,4 @@
-import { appRouter, createContext } from '@doublecheck/api';
+import { appRouter, createContext } from '@/lib/api';
 
 export const createCaller = async () => {
   // This will be called server-side

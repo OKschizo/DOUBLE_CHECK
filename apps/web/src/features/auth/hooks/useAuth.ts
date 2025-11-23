@@ -5,7 +5,7 @@ import { onAuthStateChange } from '@/lib/firebase/auth';
 import { useAuthStore } from '../stores/authStore';
 import { doc, onSnapshot } from 'firebase/firestore';
 import { db, timestampToDate } from '@/lib/firebase/firestore';
-import type { User } from '@doublecheck/schemas';
+import type { User } from '@/lib/schemas';
 
 export function useAuth() {
   const { firebaseUser, user, loading, setFirebaseUser, setUser, setLoading } = useAuthStore();

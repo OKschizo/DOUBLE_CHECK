@@ -4,7 +4,7 @@ import React from 'react';
 import Image from 'next/image';
 import { trpc } from '@/lib/trpc/client';
 import { isFirebaseStorageUrl } from '@/lib/firebase/storage';
-import type { ReferenceImage } from '@doublecheck/schemas';
+import type { ReferenceImage } from '@/lib/schemas';
 import { getProjectTerminology } from '@/shared/utils/projectTerminology';
 
 interface ReferenceImageModalProps {

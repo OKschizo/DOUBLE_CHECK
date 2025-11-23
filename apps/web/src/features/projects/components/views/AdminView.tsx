@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { trpc } from '@/lib/trpc/client';
 import { useAuth } from '@/features/auth/hooks/useAuth';
-import type { ProjectRole } from '@doublecheck/schemas';
+import type { ProjectRole } from '@/lib/schemas';
 
 interface AdminViewProps {
   projectId: string;

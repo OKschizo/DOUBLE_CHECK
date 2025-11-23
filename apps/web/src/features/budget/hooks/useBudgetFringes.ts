@@ -1,5 +1,5 @@
 import { trpc } from '@/lib/trpc/client';
-import type { CreateFringeRateInput, UpdateFringeRateInput } from '@doublecheck/schemas';
+import type { CreateFringeRateInput, UpdateFringeRateInput } from '@/lib/schemas';
 
 export function useBudgetFringes(projectId: string): {
   fringes: any[];

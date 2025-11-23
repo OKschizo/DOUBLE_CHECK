@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useShots } from '@/features/scenes/hooks/useShots';
 import { trpc } from '@/lib/trpc/client';
 import { uploadImage, deleteImage, generateUniqueFilename, isBlobUrl, isFirebaseStorageUrl } from '@/lib/firebase/storage';
-import type { Shot } from '@doublecheck/schemas';
+import type { Shot } from '@/lib/schemas';
 import Image from 'next/image';
 import { ReferenceCategoryModal } from '@/features/projects/components/ReferenceCategoryModal';
 import { useReferenceImages } from '@/features/projects/hooks/useReferenceImages';

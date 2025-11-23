@@ -2,7 +2,7 @@
 
 import { useState, useRef } from 'react';
 import { trpc } from '@/lib/trpc/client';
-import type { Expense, CreateExpenseInput, UpdateExpenseInput } from '@doublecheck/schemas';
+import type { Expense, CreateExpenseInput, UpdateExpenseInput } from '@/lib/schemas';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { storage } from '@/lib/firebase/config';
 

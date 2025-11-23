@@ -1,5 +1,5 @@
 import { trpc } from '@/lib/trpc/client';
-import type { CreateExpenseInput, UpdateExpenseInput } from '@doublecheck/schemas';
+import type { CreateExpenseInput, UpdateExpenseInput } from '@/lib/schemas';
 
 export function useExpenses(projectId: string) {
   const utils = trpc.useUtils();

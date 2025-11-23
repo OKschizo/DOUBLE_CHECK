@@ -1,4 +1,4 @@
-import type { CrewTemplate } from '@doublecheck/schemas';
+import type { CrewTemplate } from '@/lib/schemas';
 
 export const commercialCrewTemplate: Omit<CrewTemplate, 'id' | 'createdAt' | 'updatedAt'> = {
   name: 'Commercial Production Crew Template',

@@ -4,7 +4,7 @@ import { documentaryCrewTemplate } from './documentaryCrewTemplate';
 import { episodicCrewTemplate } from './episodicCrewTemplate';
 import { musicVideoCrewTemplate } from './musicVideoCrewTemplate';
 import { photoshootCrewTemplate } from './photoshootCrewTemplate';
-import type { CrewTemplate } from '@doublecheck/schemas';
+import type { CrewTemplate } from '@/lib/schemas';
 
 // Generate IDs for templates
 const generateTemplateId = (name: string) => `crew_template_${name.toLowerCase().replace(/\s+/g, '_')}`;

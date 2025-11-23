@@ -6,7 +6,7 @@ import { useReferenceImages } from '@/features/projects/hooks/useReferenceImages
 import { uploadImage, isFirebaseStorageUrl } from '@/lib/firebase/storage';
 import { ReferenceCategoryModal } from '@/features/projects/components/ReferenceCategoryModal';
 import { ReferenceImageModal } from '@/features/projects/components/ReferenceImageModal';
-import type { ReferenceImage } from '@doublecheck/schemas';
+import type { ReferenceImage } from '@/lib/schemas';
 
 interface ReferenceGalleryProps {
   projectId: string;

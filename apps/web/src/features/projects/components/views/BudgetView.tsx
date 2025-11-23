@@ -12,7 +12,7 @@ import { ExpenseImport } from '@/features/budget/components/ExpenseImport';
 import { BudgetLinkModal } from '@/features/budget/components/BudgetLinkModal';
 import { CreateFromModal } from '@/features/budget/components/CreateFromModal';
 import { trpc } from '@/lib/trpc/client';
-import type { BudgetItem, BudgetItemStatus, BudgetPhase, BudgetCategory } from '@doublecheck/schemas';
+import type { BudgetItem, BudgetItemStatus, BudgetPhase, BudgetCategory } from '@/lib/schemas';
 
 interface BudgetViewProps {
   projectId: string;

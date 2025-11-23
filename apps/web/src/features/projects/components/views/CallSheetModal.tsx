@@ -2,7 +2,7 @@
 
 import { useMemo } from 'react';
 import { trpc } from '@/lib/trpc/client';
-import type { ShootingDay, ScheduleEvent } from '@doublecheck/schemas';
+import type { ShootingDay, ScheduleEvent } from '@/lib/schemas';
 
 interface CallSheetModalProps {
   projectId: string;

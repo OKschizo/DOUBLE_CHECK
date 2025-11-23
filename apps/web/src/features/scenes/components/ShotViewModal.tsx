@@ -3,7 +3,7 @@
 import { trpc } from '@/lib/trpc/client';
 import { getProjectTerminology } from '@/shared/utils/projectTerminology';
 import { isFirebaseStorageUrl } from '@/lib/firebase/storage';
-import type { Shot } from '@doublecheck/schemas';
+import type { Shot } from '@/lib/schemas';
 import Image from 'next/image';
 
 interface ShotViewModalProps {

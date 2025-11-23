@@ -1,4 +1,4 @@
-import type { BudgetTemplate } from '@doublecheck/schemas';
+import type { BudgetTemplate } from '@/lib/schemas';
 
 export const musicVideoTemplate =  {
   name: 'Music Video Template',

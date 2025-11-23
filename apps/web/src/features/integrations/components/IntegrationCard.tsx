@@ -1,7 +1,7 @@
 'use client';
 
 import { trpc } from '@/lib/trpc/client';
-import { integrationMetadata, type Integration } from '@doublecheck/schemas';
+import { integrationMetadata, type Integration } from '@/lib/schemas';
 import { useState } from 'react';
 import { IntegrationSettingsModal } from './IntegrationSettingsModal';
 

@@ -4,7 +4,7 @@ import { documentaryTemplate } from './documentaryTemplate';
 import { episodicTemplate } from './episodicTemplate';
 import { musicVideoTemplate } from './musicVideoTemplate';
 import { photoshootTemplate } from './photoshootTemplate';
-import type { BudgetTemplate } from '@doublecheck/schemas';
+import type { BudgetTemplate } from '@/lib/schemas';
 
 // Generate IDs for templates (in real implementation, these would come from database)
 const generateTemplateId = (name: string) => `template_${name.toLowerCase().replace(/\s+/g, '_')}`;

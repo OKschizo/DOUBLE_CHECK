@@ -1,4 +1,4 @@
-import type { BudgetTemplate } from '@doublecheck/schemas';
+import type { BudgetTemplate } from '@/lib/schemas';
 
 export const episodicTemplate =  {
   name: 'Episodic/Series Template',

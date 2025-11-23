@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { trpc } from '@/lib/trpc/client';
-import { type Integration } from '@doublecheck/schemas';
+import { type Integration } from '@/lib/schemas';
 import { createPortal } from 'react-dom';
 
 interface IntegrationSettingsModalProps {

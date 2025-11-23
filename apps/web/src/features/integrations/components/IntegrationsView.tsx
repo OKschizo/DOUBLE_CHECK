@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { trpc } from '@/lib/trpc/client';
-import { integrationMetadata, type IntegrationType } from '@doublecheck/schemas';
+import { integrationMetadata, type IntegrationType } from '@/lib/schemas';
 import { IntegrationCard } from './IntegrationCard';
 import { IntegrationModal } from './IntegrationModal';
 

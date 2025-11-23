@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { trpc } from '@/lib/trpc/client';
 import { uploadImage, deleteImage, generateUniqueFilename, isBlobUrl } from '@/lib/firebase/storage';
-import type { Scene } from '@doublecheck/schemas';
+import type { Scene } from '@/lib/schemas';
 import Image from 'next/image';
 
 interface SceneDetailModalProps {

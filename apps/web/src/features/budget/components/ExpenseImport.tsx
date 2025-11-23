@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useExpenses } from '../hooks/useExpenses';
-import type { ExpenseImportRow } from '@doublecheck/schemas';
+import type { ExpenseImportRow } from '@/lib/schemas';
 
 interface ExpenseImportProps {
   projectId: string;

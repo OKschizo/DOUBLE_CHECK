@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { trpc } from '@/lib/trpc/client';
-import type { ScheduleEventType } from '@doublecheck/schemas';
+import type { ScheduleEventType } from '@/lib/schemas';
 
 interface EventCreationModalProps {
   projectId: string;

@@ -9,7 +9,7 @@ import { ShotViewModal } from '@/features/scenes/components/ShotViewModal';
 import { isFirebaseStorageUrl, uploadImage } from '@/lib/firebase/storage';
 import { trpc } from '@/lib/trpc/client';
 import { useAuth } from '@/features/auth/hooks/useAuth';
-import { Shot } from '@doublecheck/schemas';
+import { Shot } from '@/lib/schemas';
 import { ReferenceGallery } from '../ReferenceGallery';
 import { ReferenceCategoryModal } from '@/features/projects/components/ReferenceCategoryModal';
 

@@ -1,6 +1,6 @@
 'use client';
 
-import type { BudgetCategory, BudgetItem } from '@doublecheck/schemas';
+import type { BudgetCategory, BudgetItem } from '@/lib/schemas';
 
 interface BudgetSummaryProps {
   categories: BudgetCategory[];

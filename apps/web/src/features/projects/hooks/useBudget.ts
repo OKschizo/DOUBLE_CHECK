@@ -1,5 +1,5 @@
 import { trpc } from '@/lib/trpc/client';
-import type { CreateBudgetCategoryInput, UpdateBudgetCategoryInput, CreateBudgetItemInput, UpdateBudgetItemInput } from '@doublecheck/schemas';
+import type { CreateBudgetCategoryInput, UpdateBudgetCategoryInput, CreateBudgetItemInput, UpdateBudgetItemInput } from '@/lib/schemas';
 
 export function useBudget(projectId: string) {
   const utils = trpc.useUtils();

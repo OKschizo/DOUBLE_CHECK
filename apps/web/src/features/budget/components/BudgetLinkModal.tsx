@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { trpc } from '@/lib/trpc/client';
-import type { BudgetItem } from '@doublecheck/schemas';
+import type { BudgetItem } from '@/lib/schemas';
 
 interface BudgetLinkModalProps {
   projectId: string;

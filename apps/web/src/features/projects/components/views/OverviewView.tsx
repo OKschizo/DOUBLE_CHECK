@@ -1,6 +1,6 @@
 'use client';
 
-import type { Project } from '@doublecheck/schemas';
+import type { Project } from '@/lib/schemas';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 

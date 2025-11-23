@@ -1,4 +1,4 @@
-import type { Project } from '@doublecheck/schemas';
+import type { Project } from '@/lib/schemas';
 import Link from 'next/link';
 import Image from 'next/image';
 import { trpc } from '@/lib/trpc/client';

@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { trpc } from '@/lib/trpc/client';
 import { useAuth } from '@/features/auth/hooks/useAuth';
-import { Location, LocationType, LocationStatus } from '@doublecheck/schemas';
+import { Location, LocationType, LocationStatus } from '@/lib/schemas';
 import { uploadImage, deleteImage, isBlobUrl, isFirebaseStorageUrl, generateUniqueFilename } from '@/lib/firebase/storage';
 import { useMyRole } from '@/features/projectMembers/hooks/useProjectMembers';
 import { LocationTemplates } from '@/features/locations/components/LocationTemplates';

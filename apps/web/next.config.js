@@ -4,7 +4,6 @@ const nextConfig = {
   typescript: {
     ignoreBuildErrors: true, // Temporarily ignore type errors to deploy
   },
-  transpilePackages: ['@doublecheck/api', '@doublecheck/schemas', '@doublecheck/ui'],
   images: {
     remotePatterns: [
       {

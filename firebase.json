@@ -6,19 +6,26 @@
   "storage": {
     "rules": "storage.rules"
   },
+  "functions": [
+    {
+      "source": ".firebase/doublecheck22/functions",
+      "codebase": "firebase-frameworks-doublecheck22",
+      "runtime": "nodejs20"
+    }
+  ],
   "hosting": {
     "site": "doublecheck22",
-    "source": "apps/web",
+    "public": ".firebase/doublecheck22/hosting",
     "ignore": [
       "firebase.json",
       "**/.*",
       "**/node_modules/**"
     ],
-    "frameworksBackend": {
-      "region": "us-central1",
-      "maxInstances": 10,
-      "minInstances": 0,
-      "concurrency": 80
-    }
+    "rewrites": [
+      {
+        "source": "**",
+        "function": "ssrdoublecheck22"
+      }
+    ]
   }
 }

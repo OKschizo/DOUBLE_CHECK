@@ -1,6 +1,6 @@
 'use client';
 
-import type { BudgetPhase } from '@doublecheck/schemas';
+import type { BudgetPhase } from '@/lib/schemas';
 
 interface BudgetPhasesProps {
   selectedPhase: BudgetPhase | 'all';

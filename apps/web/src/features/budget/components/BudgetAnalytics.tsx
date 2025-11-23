@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo } from 'react';
-import type { BudgetCategory, BudgetItem } from '@doublecheck/schemas';
+import type { BudgetCategory, BudgetItem } from '@/lib/schemas';
 
 interface BudgetAnalyticsProps {
   categories: BudgetCategory[];

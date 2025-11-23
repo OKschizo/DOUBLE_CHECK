@@ -4,7 +4,7 @@ import { trpc } from '@/lib/trpc/client';
 import { useShots } from '@/features/scenes/hooks/useShots';
 import { getProjectTerminology } from '@/shared/utils/projectTerminology';
 import { isFirebaseStorageUrl } from '@/lib/firebase/storage';
-import type { Scene } from '@doublecheck/schemas';
+import type { Scene } from '@/lib/schemas';
 import Image from 'next/image';
 
 interface SceneViewModalProps {

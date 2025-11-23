@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { useBudgetFringes } from '../hooks/useBudgetFringes';
 import { trpc } from '@/lib/trpc/client';
-import type { FringeRate, CreateFringeRateInput } from '@doublecheck/schemas';
+import type { FringeRate, CreateFringeRateInput } from '@/lib/schemas';
 
 interface FringesCalculatorProps {
   projectId: string;

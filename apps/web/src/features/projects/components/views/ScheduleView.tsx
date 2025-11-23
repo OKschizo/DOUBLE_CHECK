@@ -9,7 +9,7 @@ import { ScheduleSyncModal } from './ScheduleSyncModal';
 import { CallSheetModal } from './CallSheetModal';
 import { ShootingDayEditModal } from './ShootingDayEditModal';
 import { trpc } from '@/lib/trpc/client';
-import type { ScheduleEvent, ScheduleEventType } from '@doublecheck/schemas';
+import type { ScheduleEvent, ScheduleEventType } from '@/lib/schemas';
 
 interface ScheduleViewProps {
   projectId: string;

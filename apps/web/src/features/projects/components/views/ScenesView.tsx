@@ -12,7 +12,7 @@ import { ShotDetailModal } from '@/features/scenes/components/ShotDetailModal';
 import { ShotViewModal } from '@/features/scenes/components/ShotViewModal';
 import { getProjectTerminology } from '@/shared/utils/projectTerminology';
 import { isFirebaseStorageUrl } from '@/lib/firebase/storage';
-import type { Scene } from '@doublecheck/schemas';
+import type { Scene } from '@/lib/schemas';
 
 interface ScenesViewProps {
   projectId: string;

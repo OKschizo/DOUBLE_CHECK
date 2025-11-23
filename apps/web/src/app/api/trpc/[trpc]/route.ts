@@ -1,5 +1,5 @@
 import { fetchRequestHandler } from '@trpc/server/adapters/fetch';
-import { appRouter, createContext } from '@doublecheck/api';
+import { appRouter, createContext } from '@/lib/api';
 
 const handler = async (req: Request) => {
   // Get user info from custom headers (passed by client)
