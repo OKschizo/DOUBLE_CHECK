@@ -3,13 +3,131 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Explicitly allow users to read/write their own document
+    // Helper function to get user's orgId
+    function getUserOrg() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.orgId;
+    }
+
+    // Helper to check if project is public/demo
+    function isPublicProject(projectId) {
+      return get(/databases/$(database)/documents/projects/$(projectId)).data.isPublic == true;
+    }
+
+    // Users can read/write their own document
     match /users/{userId} {
       allow read, write: if request.auth != null && request.auth.uid == userId;
     }
+
+    // Projects - allow reading all, including demo projects for cloning
+    match /projects/{projectId} {
+      // Allow reading any project if authenticated
+      allow read: if request.auth != null;
+      // Allow creating projects in your org
+      allow create: if request.auth != null && request.resource.data.orgId == getUserOrg();
+      // Allow updating/deleting only your org's projects
+      allow update, delete: if request.auth != null && 
+                               (resource.data.orgId == getUserOrg() ||
+                                resource.data.createdBy == request.auth.uid);
+    }
+
+    // Template collections - read-only for authenticated users
+    match /equipmentTemplates/{templateId} {
+      allow read: if request.auth != null;
+      allow write: if false; // Only via admin/script
+    }
+
+    match /crewTemplates/{templateId} {
+      allow read: if request.auth != null;
+      allow write: if false;
+    }
+
+    match /castTemplates/{templateId} {
+      allow read: if request.auth != null;
+      allow write: if false;
+    }
+
+    match /budgetTemplates/{templateId} {
+      allow read: if request.auth != null;
+      allow write: if false;
+    }
+
+    // All project-related collections - allow reading demo data for cloning, writing only your org's data
+    match /crew/{id} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null &&
+                      get(/databases/$(database)/documents/projects/$(resource.data.projectId)).data.orgId == getUserOrg();
+    }
     
-    // Temporarily allow full access to authenticated users to debug permission issues
-    // We will tighten this after confirming access works
+    match /cast/{id} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null &&
+                      get(/databases/$(database)/documents/projects/$(resource.data.projectId)).data.orgId == getUserOrg();
+    }
+    
+    match /equipment/{id} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null &&
+                      get(/databases/$(database)/documents/projects/$(resource.data.projectId)).data.orgId == getUserOrg();
+    }
+    
+    match /locations/{id} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null &&
+                      get(/databases/$(database)/documents/projects/$(resource.data.projectId)).data.orgId == getUserOrg();
+    }
+    
+    match /scenes/{id} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null &&
+                      get(/databases/$(database)/documents/projects/$(resource.data.projectId)).data.orgId == getUserOrg();
+    }
+    
+    match /shots/{id} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null &&
+                      get(/databases/$(database)/documents/projects/$(resource.data.projectId)).data.orgId == getUserOrg();
+    }
+    
+    match /budgetCategories/{id} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null &&
+                      get(/databases/$(database)/documents/projects/$(resource.data.projectId)).data.orgId == getUserOrg();
+    }
+    
+    match /shootingDays/{id} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null &&
+                      get(/databases/$(database)/documents/projects/$(resource.data.projectId)).data.orgId == getUserOrg();
+    }
+    
+    match /scheduleEvents/{id} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null &&
+                      get(/databases/$(database)/documents/projects/$(resource.data.projectId)).data.orgId == getUserOrg();
+    }
+    
+    match /expenses/{id} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null &&
+                      get(/databases/$(database)/documents/projects/$(resource.data.projectId)).data.orgId == getUserOrg();
+    }
+    
+    match /project_members/{id} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null;
+    }
+    
+    match /department_heads/{id} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null;
+    }
+    
+    match /role_requests/{id} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null;
+    }
+
+    // All other collections - authenticated users
     match /{document=**} {
       allow read, write: if request.auth != null;
     }

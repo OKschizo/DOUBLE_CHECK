@@ -11,6 +11,7 @@ import {
 import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { auth } from './config';
 import { db } from './firestore';
+import { autoCloneDemoForNewUser } from './cloneDemo';
 
 export const useAuth = () => {
   const [user, setUser] = useState<FirebaseUser | null>(null);
@@ -43,16 +44,25 @@ export const signUp = async (email: string, password: string) => {
     
     // Create user document in Firestore
     if (result.user) {
+      // Each user gets their own org (can invite others later)
+      const orgId = `org-${result.user.uid}`;
+      
       const userRef = doc(db, 'users', result.user.uid);
       await setDoc(userRef, {
         id: result.user.uid,
         email: result.user.email,
         displayName: result.user.displayName || email.split('@')[0],
-        orgId: 'default-org', // Placeholder for now
-        role: 'admin', // Default first user to admin for now, or 'viewer'
+        orgId,
+        role: 'admin', // Owner of their own org
         photoURL: result.user.photoURL || null,
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
+      });
+
+      // Auto-clone Nike demo project for new user (non-blocking)
+      autoCloneDemoForNewUser(result.user.uid, orgId).catch((error) => {
+        console.error('Failed to clone demo project:', error);
+        // Don't block signup if demo cloning fails
       });
     }
 
@@ -85,15 +95,22 @@ export const signInWithGoogle = async () => {
       const userRef = doc(db, 'users', result.user.uid);
       getDoc(userRef).then((userSnap) => {
         if (!userSnap.exists()) {
+          const orgId = `org-${result.user.uid}`;
+          
           setDoc(userRef, {
             id: result.user.uid,
             email: result.user.email,
             displayName: result.user.displayName || result.user.email?.split('@')[0],
-            orgId: 'default-org',
+            orgId,
             role: 'admin',
             photoURL: result.user.photoURL || null,
             createdAt: serverTimestamp(),
             updatedAt: serverTimestamp(),
+          }).then(() => {
+            // Auto-clone Nike demo project for new user
+            autoCloneDemoForNewUser(result.user.uid, orgId).catch((error) => {
+              console.error('Failed to clone demo project:', error);
+            });
           }).catch(() => {
             // Silently ignore errors
           });

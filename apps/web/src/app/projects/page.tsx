@@ -4,6 +4,7 @@ import { ProtectedRoute } from '@/shared/components/layout/ProtectedRoute';
 import { DashboardLayout } from '@/shared/components/layout/DashboardLayout';
 import { useProjects } from '@/features/projects/hooks/useProjects';
 import { ProjectCard } from '@/features/projects/components/ProjectCard';
+import { CloneDemoButton } from '@/features/projects/components/CloneDemoButton';
 import Link from 'next/link';
 
 export default function ProjectsPage() {
@@ -13,17 +14,20 @@ export default function ProjectsPage() {
     <ProtectedRoute>
       <DashboardLayout>
         <div>
-          <div className="flex justify-between items-center mb-8">
+          <div className="flex justify-between items-center mb-8 flex-wrap gap-4">
             <div>
               <h1 className="text-4xl font-bold mb-2">Projects</h1>
               <p className="text-text-secondary">Manage your film production projects</p>
             </div>
-            <Link
-              href="/projects/new"
-              className="px-6 py-3 bg-accent-primary text-white rounded-lg hover:bg-accent-hover transition-colors font-medium"
-            >
-              + New Project
-            </Link>
+            <div className="flex items-center gap-3">
+              <CloneDemoButton />
+              <Link
+                href="/projects/new"
+                className="px-6 py-3 bg-accent-primary text-white rounded-lg hover:bg-accent-hover transition-colors font-medium whitespace-nowrap"
+              >
+                + New Project
+              </Link>
+            </div>
           </div>
 
           {isLoading && (
@@ -40,18 +44,15 @@ export default function ProjectsPage() {
           )}
 
           {projects && projects.length === 0 && (
-            <div className="text-center py-12">
+            <div className="text-center py-16">
               <div className="text-6xl mb-4">📁</div>
               <h3 className="text-xl font-semibold mb-2">No projects yet</h3>
               <p className="text-text-secondary mb-6">
-                Get started by creating your first project
+                Get started by creating your first project or try our fully-featured Nike demo
               </p>
-              <Link
-                href="/projects/new"
-                className="inline-block px-6 py-3 bg-accent-primary text-white rounded-lg hover:bg-accent-hover transition-colors font-medium"
-              >
-                Create Your First Project
-              </Link>
+              <p className="text-text-muted text-sm">
+                Use the buttons above to get started
+              </p>
             </div>
           )}
 

@@ -2,16 +2,22 @@
 
 import React, { useState, useMemo, useRef } from 'react';
 import Image from 'next/image';
-import { useScenes } from '@/features/scenes/hooks/useScenes';
+import { useScenesByProject as useScenes } from '@/features/scenes/hooks/useScenes';
 import { useProjectShots } from '@/features/scenes/hooks/useProjectShots';
 import { ShotDetailModal } from '@/features/scenes/components/ShotDetailModal';
 import { ShotViewModal } from '@/features/scenes/components/ShotViewModal';
+import { CoverageTemplateModal } from '@/features/scenes/components/CoverageTemplateModal';
+import { useApplyCoverageTemplate } from '@/features/scenes/hooks/useCoverageTemplates';
 import { isFirebaseStorageUrl, uploadImage } from '@/lib/firebase/storage';
-import { trpc } from '@/lib/trpc/client';
 import { useAuth } from '@/features/auth/hooks/useAuth';
 import { Shot } from '@/lib/schemas';
 import { ReferenceGallery } from '../ReferenceGallery';
 import { ReferenceCategoryModal } from '@/features/projects/components/ReferenceCategoryModal';
+import { useCastByProject } from '@/features/cast/hooks/useCast';
+import { useCrewByProject } from '@/features/crew/hooks/useCrew';
+import { useEquipmentByProject } from '@/features/equipment/hooks/useEquipment';
+import { useLocationsByProject } from '@/features/locations/hooks/useLocations';
+import { useSchedule } from '@/features/projects/hooks/useSchedule';
 
 interface StoryboardViewProps {
   projectId: string;
@@ -19,15 +25,15 @@ interface StoryboardViewProps {
 
 export function StoryboardView({ projectId }: StoryboardViewProps) {
   const { user } = useAuth();
-  const { scenes, isLoading: isLoadingScenes } = useScenes(projectId);
+  const { data: scenes = [], isLoading: isLoadingScenes } = useScenes(projectId);
   const { shots, isLoading: isLoadingShots, updateShot, createShot, updateShotOrder } = useProjectShots(projectId);
   
   // Fetch dependencies for modals
-  const { data: castMembers = [] } = trpc.cast.listByProject.useQuery({ projectId });
-  const { data: crewMembers = [] } = trpc.crew.listByProject.useQuery({ projectId });
-  const { data: equipment = [] } = trpc.equipment.listByProject.useQuery({ projectId });
-  const { data: locations = [] } = trpc.locations.listByProject.useQuery({ projectId });
-  const { data: schedule } = trpc.schedule.getSchedule.useQuery({ projectId });
+  const { data: castMembers = [] } = useCastByProject(projectId);
+  const { data: crewMembers = [] } = useCrewByProject(projectId);
+  const { data: equipment = [] } = useEquipmentByProject(projectId);
+  const { data: locations = [] } = useLocationsByProject(projectId);
+  const { schedule } = useSchedule(projectId);
 
   const [selectedShot, setSelectedShot] = useState<Shot | null>(null);
   const [showShotViewModal, setShowShotViewModal] = useState(false);
@@ -45,8 +51,10 @@ export function StoryboardView({ projectId }: StoryboardViewProps) {
   const [uploadingShotId, setUploadingShotId] = useState<string | null>(null);
   const [draggedShot, setDraggedShot] = useState<Shot | null>(null);
   const [draggedReference, setDraggedReference] = useState<string | null>(null);
+  const [showCoverageModal, setShowCoverageModal] = useState(false);
+  const [selectedSceneForCoverage, setSelectedSceneForCoverage] = useState<any | null>(null);
 
-  // Group shots by scene
+  // Group shots by scene with master/coverage hierarchy
   const shotsByScene = useMemo(() => {
     const grouped: Record<string, Shot[]> = {};
     scenes.forEach(scene => {
@@ -73,6 +81,32 @@ export function StoryboardView({ projectId }: StoryboardViewProps) {
 
     return grouped;
   }, [scenes, shots]);
+
+  // Create master/coverage hierarchy
+  const shotsWithHierarchy = useMemo(() => {
+    const hierarchical: Record<string, Array<{ shot: Shot; isCoverage: boolean; indent: number }>> = {};
+    
+    Object.keys(shotsByScene).forEach(sceneId => {
+      const sceneShots = shotsByScene[sceneId];
+      hierarchical[sceneId] = [];
+      
+      sceneShots.forEach(shot => {
+        // Check if this is a master shot
+        const isMaster = (shot as any).isMaster === true;
+        
+        // Check if this shot is coverage for a master (linked via masterShotId)
+        const isCoverage = !isMaster && (shot as any).masterShotId;
+        
+        hierarchical[sceneId].push({
+          shot,
+          isCoverage,
+          indent: isCoverage ? 1 : 0,
+        });
+      });
+    });
+    
+    return hierarchical;
+  }, [shotsByScene]);
 
   const handleImageUpload = async (file: File, shotId: string) => {
     if (!file) return;
@@ -341,6 +375,17 @@ export function StoryboardView({ projectId }: StoryboardViewProps) {
                       className="text-xs bg-accent-primary/10 text-accent-primary px-2 py-1 rounded hover:bg-accent-primary/20 transition-colors font-medium"
                     >
                       + Add Shot
+                    </button>
+                    <button 
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setSelectedSceneForCoverage(scene);
+                        setShowCoverageModal(true);
+                      }}
+                      className="text-xs bg-purple-500/10 text-purple-400 px-2 py-1 rounded hover:bg-purple-500/20 transition-colors font-medium"
+                      title="Apply coverage template to create multiple shots at once"
+                    >
+                      📋 Apply Coverage
                     </button>
                     <button 
                       onClick={() => {
@@ -709,6 +754,35 @@ export function StoryboardView({ projectId }: StoryboardViewProps) {
             </div>
         </div>
       )}
+
+      {/* Coverage Template Modal */}
+      {showCoverageModal && selectedSceneForCoverage && (
+        <CoverageTemplateModalWrapper
+          scene={selectedSceneForCoverage}
+          projectId={projectId}
+          onClose={() => {
+            setShowCoverageModal(false);
+            setSelectedSceneForCoverage(null);
+          }}
+        />
+      )}
     </div>
+  );
+}
+
+// Coverage Template Modal Wrapper (to use hook properly)
+function CoverageTemplateModalWrapper({ scene, projectId, onClose }: { scene: any; projectId: string; onClose: () => void }) {
+  const { applyTemplate } = useApplyCoverageTemplate(scene.id, projectId);
+  
+  return (
+    <CoverageTemplateModal
+      scene={scene}
+      onClose={onClose}
+      onApply={async (template) => {
+        await applyTemplate(template);
+        alert(`✅ Created ${template.shots.length} shots for Scene ${scene.sceneNumber}!`);
+        onClose();
+      }}
+    />
   );
 }

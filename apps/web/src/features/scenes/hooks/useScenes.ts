@@ -1,68 +1,152 @@
-import { trpc } from '@/lib/trpc/client';
-import { useMemo } from 'react';
+import { 
+  collection, 
+  query, 
+  where, 
+  onSnapshot, 
+  addDoc, 
+  updateDoc, 
+  deleteDoc, 
+  doc, 
+  serverTimestamp,
+  orderBy 
+} from 'firebase/firestore';
+import { db } from '@/lib/firebase/config';
+import { useAuth } from '@/features/auth/hooks/useAuth';
+import { useEffect, useState } from 'react';
+import { syncSceneToSchedule } from '@/lib/firebase/syncUtils';
 
-export function useScenes(projectId: string) {
-  const utils = trpc.useUtils();
+export function useScenesByProject(projectId: string) {
+  const [scenes, setScenes] = useState<any[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<Error | null>(null);
 
-  const { data: scenes = [], isLoading, error, refetch } = trpc.scenes.listByProject.useQuery({ projectId });
+  useEffect(() => {
+    if (!projectId) {
+      setScenes([]);
+      setIsLoading(false);
+      return;
+    }
 
-  // Convert date strings to Date objects and sort numerically
-  const processedScenes = useMemo(() => {
-    const mapped = scenes.map((scene) => ({
-      ...scene,
-      scheduledDate: scene.scheduledDate instanceof Date ? scene.scheduledDate : scene.scheduledDate ? new Date(scene.scheduledDate) : undefined,
-      createdAt: scene.createdAt instanceof Date ? scene.createdAt : new Date(scene.createdAt),
-      updatedAt: scene.updatedAt instanceof Date ? scene.updatedAt : new Date(scene.updatedAt),
-    }));
-    
-    return mapped.sort((a, b) => a.sceneNumber.localeCompare(b.sceneNumber, undefined, { numeric: true }));
-  }, [scenes]);
+    const q = query(
+      collection(db, 'scenes'),
+      where('projectId', '==', projectId),
+      orderBy('sceneNumber')
+    );
 
-  const createScene = trpc.scenes.create.useMutation({
-    onSuccess: () => {
-      utils.scenes.listByProject.invalidate({ projectId });
-    },
-  });
+    const unsubscribe = onSnapshot(q, 
+      (snapshot) => {
+        const list = snapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data(),
+          createdAt: doc.data().createdAt?.toDate() || new Date(),
+          updatedAt: doc.data().updatedAt?.toDate() || new Date(),
+        }));
+        
+        setScenes(list);
+        setIsLoading(false);
+      },
+      (err) => {
+        console.error('Error fetching scenes:', err);
+        setError(err);
+        setIsLoading(false);
+      }
+    );
 
-  const updateScene = trpc.scenes.update.useMutation({
-    onSuccess: () => {
-      utils.scenes.listByProject.invalidate({ projectId });
-      utils.scenes.getById.invalidate({ id: projectId });
-    },
-  });
+    return () => unsubscribe();
+  }, [projectId]);
 
-  const deleteScene = trpc.scenes.delete.useMutation({
-    onSuccess: () => {
-      utils.scenes.listByProject.invalidate({ projectId });
-    },
-  });
-
-  const linkToSchedule = trpc.scenes.linkToSchedule.useMutation({
-    onSuccess: () => {
-      utils.scenes.listByProject.invalidate({ projectId });
-      utils.schedule.getSchedule.invalidate({ projectId });
-    },
-  });
-
-  const getScheduleConflicts = trpc.scenes.getScheduleConflicts.useQuery;
-
-  const bulkCreate = trpc.scenes.bulkCreate.useMutation({
-    onSuccess: () => {
-      utils.scenes.listByProject.invalidate({ projectId });
-    },
-  });
-
-  return {
-    scenes: processedScenes,
-    isLoading,
-    error,
-    refetch,
-    createScene,
-    updateScene,
-    deleteScene,
-    linkToSchedule,
-    getScheduleConflicts,
-    bulkCreate,
-  };
+  return { data: scenes, isLoading, error };
 }
 
+export function useCreateScene() {
+  const { user } = useAuth();
+
+  const mutateAsync = async (data: any) => {
+    if (!user) throw new Error('Must be logged in');
+
+    const docData = {
+      ...data,
+      createdBy: user.id,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    };
+
+    const docRef = await addDoc(collection(db, 'scenes'), docData);
+    return { id: docRef.id, ...docData };
+  };
+
+  return { mutateAsync };
+}
+
+export function useUpdateScene() {
+  const mutateAsync = async ({ id, data }: { id: string; data: any }) => {
+    const docRef = doc(db, 'scenes', id);
+    await updateDoc(docRef, {
+      ...data,
+      updatedAt: serverTimestamp(),
+    });
+
+    // Sync to schedule if shootingDayIds are provided
+    if (data.shootingDayIds && Array.isArray(data.shootingDayIds)) {
+      await syncSceneToSchedule(id, data.shootingDayIds)
+        .catch(err => console.error('Schedule sync failed:', err));
+    }
+
+    return { id, ...data };
+  };
+
+  return { mutateAsync };
+}
+
+export function useDeleteScene() {
+  const mutateAsync = async ({ id }: { id: string }) => {
+    await deleteDoc(doc(db, 'scenes', id));
+  };
+
+  return { mutateAsync };
+}
+
+// Alias for compatibility
+export function useScenes(projectId: string) {
+  return useScenesByProject(projectId);
+}
+
+// Hook to fetch a single scene
+export function useScene(sceneId: string) {
+  const [scene, setScene] = useState<any>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<Error | null>(null);
+
+  useEffect(() => {
+    if (!sceneId) {
+      setScene(null);
+      setIsLoading(false);
+      return;
+    }
+
+    const unsubscribe = onSnapshot(doc(db, 'scenes', sceneId), 
+      (docSnap) => {
+        if (docSnap.exists()) {
+          setScene({
+            id: docSnap.id,
+            ...docSnap.data(),
+            createdAt: docSnap.data().createdAt?.toDate() || new Date(),
+            updatedAt: docSnap.data().updatedAt?.toDate() || new Date(),
+          });
+        } else {
+          setScene(null);
+        }
+        setIsLoading(false);
+      },
+      (err) => {
+        console.error('Error fetching scene:', err);
+        setError(err);
+        setIsLoading(false);
+      }
+    );
+
+    return () => unsubscribe();
+  }, [sceneId]);
+
+  return { data: scene, isLoading, error };
+}

@@ -1,5 +1,8 @@
 {
-  "installCommand": "cd ../.. && pnpm install",
-  "buildCommand": "cd ../.. && pnpm build --filter=web"
+  "buildCommand": "cd ../.. && pnpm install && cd apps/web && pnpm build",
+  "outputDirectory": ".next",
+  "installCommand": "echo 'Skipping default install'",
+  "framework": "nextjs",
+  "regions": ["iad1"]
 }
 

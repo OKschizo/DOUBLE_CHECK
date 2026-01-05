@@ -1,7 +1,7 @@
 import type { Project } from '@/lib/schemas';
 import Link from 'next/link';
 import Image from 'next/image';
-import { trpc } from '@/lib/trpc/client';
+import { useDeleteProject } from '../hooks/useProjects';
 
 interface ProjectCardProps {
   project: Project | Omit<Project, 'createdAt' | 'updatedAt' | 'startDate' | 'endDate'> & {
@@ -60,35 +60,57 @@ const statusConfig = {
 
 export function ProjectCard({ project, onDelete }: ProjectCardProps) {
   const status = statusConfig[project.status] || statusConfig.planning;
-  const utils = trpc.useUtils();
-  const deleteProject = trpc.projects.delete.useMutation({
-    onSuccess: () => {
-      utils.projects.list.invalidate();
-      if (onDelete) onDelete();
-    },
-  });
+  const { mutateAsync: deleteProject } = useDeleteProject();
 
-  const handleDelete = (e: React.MouseEvent) => {
+  const handleDelete = async (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
+    
+    console.log('Attempting to delete project:', {
+      id: project.id,
+      title: project.title,
+      orgId: (project as any).orgId,
+      isPublic: (project as any).isPublic,
+      isClonedDemo: (project as any).isClonedDemo,
+    });
+    
     if (confirm(`Are you sure you want to delete "${project.title}"? This cannot be undone.`)) {
-      deleteProject.mutate({ id: project.id });
+      try {
+        await deleteProject({ id: project.id });
+        if (onDelete) onDelete();
+      } catch (error: any) {
+        console.error("Failed to delete project:", error);
+        alert(`Failed to delete project: ${error.message || 'Unknown error'}\n\nCheck console for details.`);
+      }
     }
   };
   
+  const isClonedDemo = (project as any).isClonedDemo;
+  const isPublicDemo = (project as any).isPublic;
+
   return (
     <div className="group block h-full relative">
       <div className="card-elevated h-full hover:border-accent-primary hover:shadow-xl transition-all duration-300 overflow-hidden flex flex-col">
-        {/* Delete Button */}
-        <button
-          onClick={handleDelete}
-          className="absolute top-3 right-3 z-10 w-8 h-8 bg-black/50 text-white rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-600"
-          title="Delete Project"
-        >
-          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-          </svg>
-        </button>
+        {/* Demo Badge - Show for cloned demo projects */}
+        {isClonedDemo && (
+          <div className="absolute top-4 left-4 z-10 px-3 py-1 bg-gradient-to-r from-blue-500 to-purple-500 text-white text-xs font-bold rounded-full shadow-lg flex items-center gap-1">
+            <span>✨</span>
+            <span>DEMO</span>
+          </div>
+        )}
+
+        {/* Delete Button - Show for user's projects (but not public template demo) */}
+        {!isPublicDemo && (
+          <button
+            onClick={handleDelete}
+            className="absolute top-3 right-3 z-10 w-8 h-8 bg-black/50 text-white rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-600"
+            title="Delete Project"
+          >
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+            </svg>
+          </button>
+        )}
 
         {/* Gradient accent bar */}
         <div className={`h-1.5 bg-gradient-to-r ${status.color}`} />
