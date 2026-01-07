@@ -43,6 +43,21 @@ export const equipmentStatusSchema = z.enum([
 
 export type EquipmentStatus = z.infer<typeof equipmentStatusSchema>;
 
+// Equipment procurement/tracking status
+export const equipmentProcurementStatusSchema = z.enum([
+  'needed',        // Need to get this equipment
+  'requested',     // Requested from vendor/rental house
+  'reserved',      // Reserved/confirmed with vendor
+  'picked_up',     // Picked up from vendor
+  'on_set',        // Currently on set/in use
+  'wrapped',       // Done using, ready to return
+  'returned',      // Returned to vendor
+  'unavailable',   // Could not be obtained
+  'cancelled',     // No longer needed
+]);
+
+export type EquipmentProcurementStatus = z.infer<typeof equipmentProcurementStatusSchema>;
+
 // Equipment source
 export const equipmentSourceSchema = z.enum([
   'owned',
@@ -63,12 +78,32 @@ export const equipmentSchema = z.object({
   status: equipmentStatusSchema.default('available'),
   source: equipmentSourceSchema.default('owned'),
   
+  // Procurement & Tracking
+  procurementStatus: equipmentProcurementStatusSchema.default('needed'),
+  daysNeeded: z.number().int().min(1).optional(), // How many days equipment is needed
+  
+  // Date tracking
+  reservedDate: z.coerce.date().optional(),      // When it was reserved
+  pickupDate: z.coerce.date().optional(),        // Scheduled pickup date
+  pickedUpDate: z.coerce.date().optional(),      // Actual pickup date
+  pickupConfirmedBy: z.string().optional(),      // Crew member who confirmed pickup
+  returnDate: z.coerce.date().optional(),        // Scheduled return date
+  returnedDate: z.coerce.date().optional(),      // Actual return date
+  returnConfirmedBy: z.string().optional(),      // Crew member who confirmed return
+  
   // Assignment & Accountability
-  assignedTo: z.array(z.string()).default([]), // Array of user IDs
-  responsibleParty: z.string().optional(), // Primary accountable person
+  assignedTo: z.array(z.string()).default([]),   // Array of crew member IDs
+  responsiblePartyId: z.string().optional(),     // Primary accountable crew member ID
+  responsibleDepartment: z.string().optional(),  // Department responsible
+  
+  // Shoot Day Association
+  shootingDayIds: z.array(z.string()).default([]), // Which shoot days this equipment is needed for
   
   // Rental Information
   rentalVendor: z.string().optional(),
+  vendorContact: z.string().optional(),          // Contact at rental house
+  vendorPhone: z.string().optional(),
+  confirmationNumber: z.string().optional(),     // Rental confirmation/PO number
   dailyRate: z.number().positive().optional(),
   weeklyRate: z.number().positive().optional(),
   
@@ -84,7 +119,10 @@ export const equipmentSchema = z.object({
   packageId: z.string().optional(), // If part of a package
   
   // Notes
+  description: z.string().optional(),
   notes: z.string().optional(),
+  pickupNotes: z.string().optional(),
+  returnNotes: z.string().optional(),
   
   // Metadata
   createdBy: z.string(),
