@@ -42,6 +42,19 @@ export function useScenesByProject(projectId: string) {
           updatedAt: doc.data().updatedAt?.toDate() || new Date(),
         }));
         
+        // Sort by sortOrder (if exists) then sceneNumber
+        list.sort((a: any, b: any) => {
+          // If both have sortOrder, use that
+          if (a.sortOrder !== undefined && b.sortOrder !== undefined) {
+            return a.sortOrder - b.sortOrder;
+          }
+          // If only one has sortOrder, prioritize the one without (legacy first)
+          if (a.sortOrder !== undefined) return 1;
+          if (b.sortOrder !== undefined) return -1;
+          // Fall back to sceneNumber comparison
+          return (a.sceneNumber || '').localeCompare(b.sceneNumber || '', undefined, { numeric: true });
+        });
+        
         setScenes(list);
         setIsLoading(false);
       },
@@ -79,7 +92,12 @@ export function useCreateScene() {
 }
 
 export function useUpdateScene() {
-  const mutateAsync = async ({ id, data }: { id: string; data: any }) => {
+  const mutateAsync = async ({ id, data }: { id: string; data?: any }) => {
+    if (!data || typeof data !== 'object') {
+      console.error('useUpdateScene: data is required and must be an object', { id, data });
+      throw new Error('Invalid data provided to updateScene');
+    }
+    
     const docRef = doc(db, 'scenes', id);
     await updateDoc(docRef, {
       ...data,
@@ -99,8 +117,24 @@ export function useUpdateScene() {
 }
 
 export function useDeleteScene() {
-  const mutateAsync = async ({ id }: { id: string }) => {
+  const mutateAsync = async (id: string) => {
     await deleteDoc(doc(db, 'scenes', id));
+  };
+
+  return { mutateAsync };
+}
+
+// Hook to update scene order (for drag and drop)
+export function useUpdateSceneOrder() {
+  const mutateAsync = async (updates: Array<{ id: string; sortOrder: number }>) => {
+    const promises = updates.map(({ id, sortOrder }) => {
+      const docRef = doc(db, 'scenes', id);
+      return updateDoc(docRef, {
+        sortOrder,
+        updatedAt: serverTimestamp(),
+      });
+    });
+    await Promise.all(promises);
   };
 
   return { mutateAsync };

@@ -1,10 +1,15 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import { trpc } from '@/lib/trpc/client';
+// import { trpc } from '@/lib/trpc/client';
 import { uploadImage, deleteImage, generateUniqueFilename, isBlobUrl } from '@/lib/firebase/storage';
 import type { Scene } from '@/lib/schemas';
 import Image from 'next/image';
+import { useSchedule } from '@/features/projects/hooks/useSchedule';
+import { ContinuityPanel } from './ContinuityPanel';
+import { CommentsPanel } from './CommentsPanel';
+
+type ModalTab = 'details' | 'continuity' | 'comments';
 
 interface SceneDetailModalProps {
   scene: Scene | null;
@@ -14,6 +19,9 @@ interface SceneDetailModalProps {
   equipment: any[];
   locations: any[];
   schedule: any;
+  previousScene?: Scene;
+  nextScene?: Scene;
+  allScenes?: Scene[];
   onClose: () => void;
   onSave: (data: any) => Promise<void>;
 }
@@ -26,19 +34,20 @@ export function SceneDetailModal({
   equipment,
   locations,
   schedule,
+  previousScene,
+  nextScene,
+  allScenes = [],
   onClose,
   onSave,
 }: SceneDetailModalProps) {
-  const utils = trpc.useUtils();
-  const syncScene = trpc.scenes.syncToSchedule.useMutation({
-    onSuccess: (result) => {
-      alert(result.message);
-      utils.schedule.getSchedule.invalidate({ projectId });
-    },
-    onError: (error) => {
-      alert(`Failed to sync: ${error.message}`);
-    },
-  });
+  const { schedule: scheduleData } = useSchedule(projectId); // Use hook if schedule prop is not enough or if we need to invalidate
+  
+  // Placeholder mutation
+  const syncScene = { isPending: false, mutate: (args: any) => alert("Sync not implemented") };
+
+  const [activeTab, setActiveTab] = useState<ModalTab>('details');
+  const [comments, setComments] = useState<any[]>([]);
+  
   const [formData, setFormData] = useState({
     sceneNumber: '',
     title: '',
@@ -88,14 +97,8 @@ export function SceneDetailModal({
   const [locationSearch, setLocationSearch] = useState('');
   const [shootingDaySearch, setShootingDaySearch] = useState('');
 
-  const { data: conflicts } = trpc.scenes.getScheduleConflicts.useQuery(
-    {
-      sceneId: scene?.id || 'new',
-      shootingDayId: formData.shootingDayIds[0] || undefined,
-      scheduledDate: formData.scheduledDates[0] ? new Date(formData.scheduledDates[0]) : undefined,
-    },
-    { enabled: (formData.shootingDayIds.length > 0 || formData.scheduledDates.length > 0) }
-  );
+  // Placeholder conflict check
+  const conflicts = { crew: [], cast: [], equipment: [], location: null };
 
   useEffect(() => {
     if (scene) {
@@ -207,17 +210,23 @@ export function SceneDetailModal({
 
       const submitData: any = {
         ...formData,
-        imageUrl: finalImageUrl || undefined,
         locationNames,
-        scheduledDates: scheduledDates.length > 0 ? scheduledDates : undefined,
-        scriptPageStart: formData.scriptPageStart ? parseInt(formData.scriptPageStart) : undefined,
-        scriptPageEnd: formData.scriptPageEnd ? parseInt(formData.scriptPageEnd) : undefined,
-        estimatedDuration: formData.estimatedDuration ? parseInt(formData.estimatedDuration) : undefined,
+        // Only include optional fields if they have values
+        ...(finalImageUrl ? { imageUrl: finalImageUrl } : {}),
+        ...(scheduledDates.length > 0 ? { scheduledDates } : {}),
+        ...(formData.scriptPageStart ? { scriptPageStart: parseInt(formData.scriptPageStart) } : {}),
+        ...(formData.scriptPageEnd ? { scriptPageEnd: parseInt(formData.scriptPageEnd) } : {}),
+        ...(formData.estimatedDuration ? { estimatedDuration: parseInt(formData.estimatedDuration) } : {}),
       };
 
-      // Remove empty strings
+      // Remove empty strings, empty arrays, undefined, and null values
       Object.keys(submitData).forEach((key) => {
-        if (submitData[key] === '' || (Array.isArray(submitData[key]) && submitData[key].length === 0)) {
+        if (
+          submitData[key] === '' || 
+          submitData[key] === undefined || 
+          submitData[key] === null ||
+          (Array.isArray(submitData[key]) && submitData[key].length === 0)
+        ) {
           delete submitData[key];
         }
       });
@@ -231,6 +240,7 @@ export function SceneDetailModal({
     }
   };
 
+  // ... Add/Remove helpers (same as before) ...
   const addCast = (castId: string) => {
     if (!formData.castIds.includes(castId)) {
       setFormData({ ...formData, castIds: [...formData.castIds, castId] });
@@ -296,45 +306,114 @@ export function SceneDetailModal({
     setFormData({ ...formData, shootingDayIds: formData.shootingDayIds.filter(id => id !== shootingDayId) });
   };
 
-  const selectedCast = castMembers.filter(c => formData.castIds.includes(c.id));
-  const selectedCrew = crewMembers.filter(c => formData.crewIds.includes(c.id));
-  const selectedEquipment = equipment.filter(e => formData.equipmentIds.includes(e.id));
-  const selectedLocations = locations.filter(l => formData.locationIds.includes(l.id));
-  const selectedShootingDays = schedule?.days?.filter((d: any) => formData.shootingDayIds.includes(d.id)) || [];
+  // Handler functions for ContinuityPanel and CommentsPanel
+  const handleUpdateContinuity = async (sceneId: string, continuityData: any) => {
+    await onSave(continuityData);
+  };
 
-  const availableCast = castMembers.filter(c => !formData.castIds.includes(c.id));
-  const availableCrew = crewMembers.filter(c => !formData.crewIds.includes(c.id));
-  const availableEquipment = equipment.filter(e => !formData.equipmentIds.includes(e.id));
-  const availableLocations = locations.filter(l => !formData.locationIds.includes(l.id));
-  
-  // Filtered lists based on search
-  const filteredCast = availableCast.filter(c => 
-    c.characterName?.toLowerCase().includes(castSearch.toLowerCase()) ||
-    c.actorName?.toLowerCase().includes(castSearch.toLowerCase())
-  );
-  const filteredCrew = availableCrew.filter(c => 
-    c.name?.toLowerCase().includes(crewSearch.toLowerCase()) ||
-    c.role?.toLowerCase().includes(crewSearch.toLowerCase())
-  );
-  const filteredEquipment = availableEquipment.filter(e => 
-    e.name?.toLowerCase().includes(equipmentSearch.toLowerCase())
-  );
-  const filteredLocations = availableLocations.filter(l => 
-    l.name?.toLowerCase().includes(locationSearch.toLowerCase())
-  );
-  const availableShootingDays = schedule?.days?.filter((d: any) => !formData.shootingDayIds.includes(d.id)) || [];
+  const handleAddComment = async (content: string, mentions: string[]) => {
+    // In a real app, this would save to Firebase
+    const newComment = {
+      id: `comment-${Date.now()}`,
+      userId: 'current-user',
+      userName: 'Current User',
+      content,
+      mentions,
+      createdAt: new Date(),
+      resolved: false,
+    };
+    setComments([...comments, newComment]);
+  };
+
+  const handleResolveComment = async (commentId: string) => {
+    setComments(comments.map(c => 
+      c.id === commentId ? { ...c, resolved: true } : c
+    ));
+  };
+
+  const handleReplyComment = async (commentId: string, content: string) => {
+    setComments(comments.map(c => {
+      if (c.id === commentId) {
+        return {
+          ...c,
+          replies: [...(c.replies || []), {
+            id: `reply-${Date.now()}`,
+            userId: 'current-user',
+            userName: 'Current User',
+            content,
+            mentions: [],
+            createdAt: new Date(),
+            resolved: false,
+          }],
+        };
+      }
+      return c;
+    }));
+  };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
       <div className="bg-background-primary rounded-lg max-w-4xl w-full max-h-[90vh] overflow-hidden flex flex-col">
+        {/* Header with Tabs */}
         <div className="p-6 border-b border-border-default">
-          <h2 className="text-2xl font-bold text-text-primary">
-            {scene ? 'Edit Scene' : 'Create Scene'}
-          </h2>
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-2xl font-bold text-text-primary">
+              {scene ? `Scene ${scene.sceneNumber}` : 'Create Scene'}
+            </h2>
+            <button
+              onClick={onClose}
+              className="text-text-tertiary hover:text-text-primary transition-colors"
+            >
+              <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+          
+          {/* Tab Navigation */}
+          <div className="flex gap-1 bg-background-secondary rounded-lg p-1">
+            <button
+              onClick={() => setActiveTab('details')}
+              className={`flex-1 px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+                activeTab === 'details'
+                  ? 'bg-accent-primary text-white'
+                  : 'text-text-secondary hover:text-text-primary hover:bg-background-primary'
+              }`}
+            >
+              📝 Details
+            </button>
+            <button
+              onClick={() => setActiveTab('continuity')}
+              className={`flex-1 px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+                activeTab === 'continuity'
+                  ? 'bg-accent-primary text-white'
+                  : 'text-text-secondary hover:text-text-primary hover:bg-background-primary'
+              }`}
+            >
+              🔗 Continuity
+            </button>
+            <button
+              onClick={() => setActiveTab('comments')}
+              className={`flex-1 px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+                activeTab === 'comments'
+                  ? 'bg-accent-primary text-white'
+                  : 'text-text-secondary hover:text-text-primary hover:bg-background-primary'
+              }`}
+            >
+              💬 Comments {comments.filter(c => !c.resolved).length > 0 && (
+                <span className="ml-1 px-1.5 py-0.5 text-xs bg-error rounded-full">
+                  {comments.filter(c => !c.resolved).length}
+                </span>
+              )}
+            </button>
+          </div>
         </div>
 
         <div className="flex-1 overflow-y-auto p-6">
+          {/* Details Tab */}
+          {activeTab === 'details' && (
           <form onSubmit={handleSubmit} className="space-y-6">
+            {/* Image Upload and Basic Info (same as before) */}
             {/* Image Upload */}
             <div>
               <label className="block text-sm font-medium text-text-secondary mb-2">
@@ -376,9 +455,6 @@ export function SceneDetailModal({
                   </div>
                 ) : (
                   <div className="py-8">
-                    <svg className="w-12 h-12 mx-auto mb-4 text-text-tertiary" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                    </svg>
                     <p className="text-sm text-text-secondary mb-2">
                       Drag and drop an image here, or click to browse
                     </p>
@@ -402,9 +478,7 @@ export function SceneDetailModal({
             </div>
 
             {/* Basic Information */}
-            <div>
-              <h3 className="text-lg font-semibold text-text-primary mb-4">Basic Information</h3>
-              <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-text-secondary mb-2">
                     Scene Number *
@@ -432,552 +506,477 @@ export function SceneDetailModal({
                     <option value="omitted">Omitted</option>
                   </select>
                 </div>
-                <div className="col-span-2">
-                  <label className="block text-sm font-medium text-text-secondary mb-2">
-                    Title
-                  </label>
-                  <input
-                    type="text"
-                    value={formData.title}
-                    onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-                    className="w-full px-4 py-2 bg-background-secondary border border-border-default rounded-lg text-text-primary focus:outline-none focus:border-accent-primary"
-                  />
-                </div>
-                <div className="col-span-2">
-                  <label className="block text-sm font-medium text-text-secondary mb-2">
-                    Description
-                  </label>
-                  <textarea
-                    value={formData.description}
-                    onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                    rows={3}
-                    className="w-full px-4 py-2 bg-background-secondary border border-border-default rounded-lg text-text-primary focus:outline-none focus:border-accent-primary"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-text-secondary mb-2">
-                    Page Count
-                  </label>
-                  <input
-                    type="text"
-                    value={formData.pageCount}
-                    onChange={(e) => setFormData({ ...formData, pageCount: e.target.value })}
-                    placeholder="e.g., 1/8"
-                    className="w-full px-4 py-2 bg-background-secondary border border-border-default rounded-lg text-text-primary focus:outline-none focus:border-accent-primary"
-                  />
-                </div>
+            </div>
+
+            {/* Title */}
+            <div>
+              <label className="block text-sm font-medium text-text-secondary mb-2">
+                Title
+              </label>
+              <input
+                type="text"
+                value={formData.title}
+                onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+                placeholder="Scene title or heading"
+                className="w-full px-4 py-2 bg-background-secondary border border-border-default rounded-lg text-text-primary focus:outline-none focus:border-accent-primary"
+              />
+            </div>
+
+            {/* Description */}
+            <div>
+              <label className="block text-sm font-medium text-text-secondary mb-2">
+                Description
+              </label>
+              <textarea
+                value={formData.description}
+                onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                placeholder="Scene description and action"
+                rows={3}
+                className="w-full px-4 py-2 bg-background-secondary border border-border-default rounded-lg text-text-primary focus:outline-none focus:border-accent-primary resize-none"
+              />
+            </div>
+
+            {/* Script Info */}
+            <div className="grid grid-cols-3 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-text-secondary mb-2">
+                  Page Count
+                </label>
+                <input
+                  type="text"
+                  value={formData.pageCount}
+                  onChange={(e) => setFormData({ ...formData, pageCount: e.target.value })}
+                  placeholder="e.g. 1.5"
+                  className="w-full px-4 py-2 bg-background-secondary border border-border-default rounded-lg text-text-primary focus:outline-none focus:border-accent-primary"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-text-secondary mb-2">
+                  Script Page Start
+                </label>
+                <input
+                  type="number"
+                  value={formData.scriptPageStart}
+                  onChange={(e) => setFormData({ ...formData, scriptPageStart: e.target.value })}
+                  placeholder="1"
+                  className="w-full px-4 py-2 bg-background-secondary border border-border-default rounded-lg text-text-primary focus:outline-none focus:border-accent-primary"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-text-secondary mb-2">
+                  Script Page End
+                </label>
+                <input
+                  type="number"
+                  value={formData.scriptPageEnd}
+                  onChange={(e) => setFormData({ ...formData, scriptPageEnd: e.target.value })}
+                  placeholder="2"
+                  className="w-full px-4 py-2 bg-background-secondary border border-border-default rounded-lg text-text-primary focus:outline-none focus:border-accent-primary"
+                />
               </div>
             </div>
 
-            {/* Locations - Multiple */}
+            {/* Environment */}
+            <div className="grid grid-cols-3 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-text-secondary mb-2">
+                  Time of Day
+                </label>
+                <select
+                  value={formData.timeOfDay}
+                  onChange={(e) => setFormData({ ...formData, timeOfDay: e.target.value })}
+                  className="w-full px-4 py-2 bg-background-secondary border border-border-default rounded-lg text-text-primary focus:outline-none focus:border-accent-primary"
+                >
+                  <option value="">Select...</option>
+                  <option value="day">Day</option>
+                  <option value="night">Night</option>
+                  <option value="dawn">Dawn</option>
+                  <option value="dusk">Dusk</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-text-secondary mb-2">
+                  Weather
+                </label>
+                <input
+                  type="text"
+                  value={formData.weather}
+                  onChange={(e) => setFormData({ ...formData, weather: e.target.value })}
+                  placeholder="Sunny, Rainy, etc."
+                  className="w-full px-4 py-2 bg-background-secondary border border-border-default rounded-lg text-text-primary focus:outline-none focus:border-accent-primary"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-text-secondary mb-2">
+                  Mood
+                </label>
+                <input
+                  type="text"
+                  value={formData.mood}
+                  onChange={(e) => setFormData({ ...formData, mood: e.target.value })}
+                  placeholder="Tense, Happy, etc."
+                  className="w-full px-4 py-2 bg-background-secondary border border-border-default rounded-lg text-text-primary focus:outline-none focus:border-accent-primary"
+                />
+              </div>
+            </div>
+
+            {/* Duration */}
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-text-secondary mb-2">
+                  Estimated Duration (minutes)
+                </label>
+                <input
+                  type="number"
+                  value={formData.estimatedDuration}
+                  onChange={(e) => setFormData({ ...formData, estimatedDuration: e.target.value })}
+                  placeholder="5"
+                  className="w-full px-4 py-2 bg-background-secondary border border-border-default rounded-lg text-text-primary focus:outline-none focus:border-accent-primary"
+                />
+              </div>
+              <div className="flex items-center pt-8">
+                <label className="flex items-center cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={formData.stuntsRequired}
+                    onChange={(e) => setFormData({ ...formData, stuntsRequired: e.target.checked })}
+                    className="w-4 h-4 rounded border-border-default text-accent-primary focus:ring-accent-primary"
+                  />
+                  <span className="ml-2 text-sm text-text-primary">Stunts Required</span>
+                </label>
+              </div>
+            </div>
+
+            {/* Locations */}
             <div>
-              <h3 className="text-lg font-semibold text-text-primary mb-4">Locations</h3>
-              <div className="space-y-3">
-                {selectedLocations.length > 0 && (
-                  <div className="flex flex-wrap gap-2">
-                    {selectedLocations.map((loc) => (
-                      <div
-                        key={loc.id}
-                        className="flex items-center gap-2 px-3 py-1.5 bg-background-tertiary rounded-lg border border-border-default"
-                      >
-                        <span className="text-sm text-text-primary">{loc.name}</span>
+              <label className="block text-sm font-medium text-text-secondary mb-2">
+                Locations
+              </label>
+              <div className="flex flex-wrap gap-2 mb-2">
+                {formData.locationIds.map(id => {
+                  const loc = locations.find(l => l.id === id);
+                  return loc ? (
+                    <span key={id} className="inline-flex items-center gap-1 px-2 py-1 bg-accent-primary/20 text-accent-primary rounded text-sm">
+                      {loc.name}
+                      <button type="button" onClick={() => removeLocation(id)} className="hover:text-error">×</button>
+                    </span>
+                  ) : null;
+                })}
+              </div>
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={() => setShowLocationDropdown(!showLocationDropdown)}
+                  className="btn-secondary text-sm"
+                >
+                  + Add Location
+                </button>
+                {showLocationDropdown && (
+                  <div className="absolute z-10 mt-1 w-64 bg-background-secondary border border-border-default rounded-lg shadow-lg max-h-48 overflow-y-auto">
+                    <input
+                      type="text"
+                      value={locationSearch}
+                      onChange={(e) => setLocationSearch(e.target.value)}
+                      placeholder="Search locations..."
+                      className="w-full px-3 py-2 border-b border-border-default bg-transparent text-text-primary focus:outline-none"
+                    />
+                    {locations
+                      .filter(l => l.name.toLowerCase().includes(locationSearch.toLowerCase()))
+                      .filter(l => !formData.locationIds.includes(l.id))
+                      .map(loc => (
                         <button
+                          key={loc.id}
                           type="button"
-                          onClick={() => removeLocation(loc.id)}
-                          className="text-text-tertiary hover:text-error transition-colors"
+                          onClick={() => addLocation(loc.id)}
+                          className="w-full px-3 py-2 text-left text-text-primary hover:bg-background-primary text-sm"
                         >
-                          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                          </svg>
+                          {loc.name}
                         </button>
-                      </div>
-                    ))}
+                      ))}
                   </div>
                 )}
-                <div className="relative">
-                  <button
-                    type="button"
-                    onClick={() => setShowLocationDropdown(!showLocationDropdown)}
-                    className="btn-secondary flex items-center gap-2"
-                  >
-                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                    </svg>
-                    Add Location
-                  </button>
-                  {showLocationDropdown && (
-                    <div className="absolute z-10 mt-2 w-64 bg-background-primary border border-border-default rounded-lg shadow-xl max-h-60 overflow-hidden flex flex-col">
-                      <input
-                        type="text"
-                        placeholder="Search locations..."
-                        value={locationSearch}
-                        onChange={(e) => setLocationSearch(e.target.value)}
-                        onClick={(e) => e.stopPropagation()}
-                        className="px-3 py-2 border-b border-border-default bg-background-secondary text-text-primary text-sm focus:outline-none focus:border-accent-primary"
-                      />
-                      <div className="overflow-y-auto max-h-48">
-                        {filteredLocations.length > 0 ? (
-                          filteredLocations.map((loc) => (
-                            <button
-                              key={loc.id}
-                              type="button"
-                              onClick={() => {
-                                addLocation(loc.id);
-                                setLocationSearch('');
-                              }}
-                              className="w-full text-left px-4 py-2 hover:bg-background-tertiary text-sm text-text-primary transition-colors"
-                            >
-                              {loc.name}
-                            </button>
-                          ))
-                        ) : (
-                          <div className="px-4 py-2 text-sm text-text-tertiary">No results found</div>
-                        )}
-                      </div>
-                    </div>
-                  )}
-                </div>
               </div>
             </div>
 
-            {/* Production Information */}
+            {/* Cast */}
             <div>
-              <h3 className="text-lg font-semibold text-text-primary mb-4">Production Information</h3>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-text-secondary mb-2">
-                    Shooting Days
-                  </label>
-                  <div className="space-y-2">
-                    {selectedShootingDays.length > 0 && (
-                      <div className="flex flex-wrap gap-2">
-                        {selectedShootingDays.map((day: any) => (
-                          <div
-                            key={day.id}
-                            className="flex items-center gap-2 px-3 py-1.5 bg-background-tertiary rounded-lg border border-border-default"
-                          >
-                            <span className="text-sm text-text-primary">
-                              {new Date(day.date).toLocaleDateString()} - Day {day.dayNumber || ''}
-                            </span>
-                            <button
-                              type="button"
-                              onClick={() => removeShootingDay(day.id)}
-                              className="text-text-tertiary hover:text-error transition-colors"
-                            >
-                              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                              </svg>
-                            </button>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                    <div className="relative">
-                      <button
-                        type="button"
-                        onClick={() => setShowShootingDayDropdown(!showShootingDayDropdown)}
-                        className="btn-secondary flex items-center gap-2 w-full"
-                      >
-                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                        </svg>
-                        Add Shooting Day
-                      </button>
-                      {showShootingDayDropdown && availableShootingDays.length > 0 && (
-                        <div className="absolute z-10 mt-2 w-full bg-background-primary border border-border-default rounded-lg shadow-xl max-h-60 overflow-y-auto">
-                          {availableShootingDays.map((day: any) => (
-                            <button
-                              key={day.id}
-                              type="button"
-                              onClick={() => addShootingDay(day.id)}
-                              className="w-full text-left px-4 py-2 hover:bg-background-tertiary text-sm text-text-primary transition-colors"
-                            >
-                              {new Date(day.date).toLocaleDateString()} - Day {day.dayNumber || ''}
-                            </button>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-text-secondary mb-2">
-                    Estimated Duration (minutes)
-                  </label>
-                  <input
-                    type="number"
-                    value={formData.estimatedDuration}
-                    onChange={(e) => setFormData({ ...formData, estimatedDuration: e.target.value })}
-                    className="w-full px-4 py-2 bg-background-secondary border border-border-default rounded-lg text-text-primary focus:outline-none focus:border-accent-primary"
-                  />
-                </div>
+              <label className="block text-sm font-medium text-text-secondary mb-2">
+                Cast
+              </label>
+              <div className="flex flex-wrap gap-2 mb-2">
+                {formData.castIds.map(id => {
+                  const cast = castMembers.find(c => c.id === id);
+                  return cast ? (
+                    <span key={id} className="inline-flex items-center gap-1 px-2 py-1 bg-blue-500/20 text-blue-400 rounded text-sm">
+                      {cast.characterName || cast.name}
+                      <button type="button" onClick={() => removeCast(id)} className="hover:text-error">×</button>
+                    </span>
+                  ) : null;
+                })}
               </div>
-              {conflicts && (conflicts.crew.length > 0 || conflicts.cast.length > 0 || conflicts.equipment.length > 0 || conflicts.location) && (
-                <div className="mt-4 p-4 bg-error/10 border border-error/30 rounded-lg">
-                  <h4 className="text-sm font-semibold text-error mb-2">Scheduling Conflicts Detected:</h4>
-                  <ul className="text-sm text-text-secondary space-y-1">
-                    {conflicts.crew.length > 0 && <li>Crew conflicts: {conflicts.crew.length} member(s)</li>}
-                    {conflicts.cast.length > 0 && <li>Cast conflicts: {conflicts.cast.length} member(s)</li>}
-                    {conflicts.equipment.length > 0 && <li>Equipment conflicts: {conflicts.equipment.length} item(s)</li>}
-                    {conflicts.location && <li>Location conflict: Already scheduled</li>}
-                  </ul>
-                </div>
-              )}
-            </div>
-
-            {/* Creative Information */}
-            <div>
-              <h3 className="text-lg font-semibold text-text-primary mb-4">Creative Information</h3>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-text-secondary mb-2">
-                    Time of Day
-                  </label>
-                  <select
-                    value={formData.timeOfDay}
-                    onChange={(e) => setFormData({ ...formData, timeOfDay: e.target.value })}
-                    className="w-full px-4 py-2 bg-background-secondary border border-border-default rounded-lg text-text-primary focus:outline-none focus:border-accent-primary"
-                  >
-                    <option value="">Select...</option>
-                    <option value="DAY">Day</option>
-                    <option value="NIGHT">Night</option>
-                    <option value="DAWN">Dawn</option>
-                    <option value="DUSK">Dusk</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-text-secondary mb-2">
-                    Weather
-                  </label>
-                  <input
-                    type="text"
-                    value={formData.weather}
-                    onChange={(e) => setFormData({ ...formData, weather: e.target.value })}
-                    className="w-full px-4 py-2 bg-background-secondary border border-border-default rounded-lg text-text-primary focus:outline-none focus:border-accent-primary"
-                  />
-                </div>
-                <div className="col-span-2">
-                  <label className="block text-sm font-medium text-text-secondary mb-2">
-                    Mood
-                  </label>
-                  <input
-                    type="text"
-                    value={formData.mood}
-                    onChange={(e) => setFormData({ ...formData, mood: e.target.value })}
-                    className="w-full px-4 py-2 bg-background-secondary border border-border-default rounded-lg text-text-primary focus:outline-none focus:border-accent-primary"
-                  />
-                </div>
-                <div className="col-span-2">
-                  <label className="block text-sm font-medium text-text-secondary mb-2">
-                    Visual Notes
-                  </label>
-                  <textarea
-                    value={formData.visualNotes}
-                    onChange={(e) => setFormData({ ...formData, visualNotes: e.target.value })}
-                    rows={3}
-                    className="w-full px-4 py-2 bg-background-secondary border border-border-default rounded-lg text-text-primary focus:outline-none focus:border-accent-primary"
-                  />
-                </div>
-              </div>
-            </div>
-
-            {/* Assignments - Button + Dropdown Pattern */}
-            <div>
-              <h3 className="text-lg font-semibold text-text-primary mb-4">Assignments</h3>
-              <div className="grid grid-cols-3 gap-4">
-                {/* Cast */}
-                <div>
-                  <label className="block text-sm font-medium text-text-secondary mb-2">
-                    Cast
-                  </label>
-                  <div className="space-y-2">
-                    {selectedCast.length > 0 && (
-                      <div className="space-y-1">
-                        {selectedCast.map((cast) => (
-                          <div
-                            key={cast.id}
-                            className="flex items-center justify-between px-3 py-1.5 bg-background-tertiary rounded-lg border border-border-default"
-                          >
-                            <span className="text-sm text-text-primary">{cast.characterName}</span>
-                            <button
-                              type="button"
-                              onClick={() => removeCast(cast.id)}
-                              className="text-text-tertiary hover:text-error transition-colors"
-                            >
-                              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                              </svg>
-                            </button>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                    <div className="relative">
-                      <button
-                        type="button"
-                        onClick={() => setShowCastDropdown(!showCastDropdown)}
-                        className="btn-secondary flex items-center gap-2 w-full"
-                      >
-                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                        </svg>
-                        Add Cast
-                      </button>
-                      {showCastDropdown && (
-                        <div className="absolute z-10 mt-2 w-full bg-background-primary border border-border-default rounded-lg shadow-xl max-h-60 overflow-hidden flex flex-col">
-                          <input
-                            type="text"
-                            placeholder="Search cast..."
-                            value={castSearch}
-                            onChange={(e) => setCastSearch(e.target.value)}
-                            onClick={(e) => e.stopPropagation()}
-                            className="px-3 py-2 border-b border-border-default bg-background-secondary text-text-primary text-sm focus:outline-none focus:border-accent-primary"
-                          />
-                          <div className="overflow-y-auto max-h-48">
-                            {filteredCast.length > 0 ? (
-                              filteredCast.map((cast) => (
-                                <button
-                                  key={cast.id}
-                                  type="button"
-                                  onClick={() => {
-                                    addCast(cast.id);
-                                    setCastSearch('');
-                                  }}
-                                  className="w-full text-left px-4 py-2 hover:bg-background-tertiary text-sm text-text-primary transition-colors"
-                                >
-                                  {cast.characterName} {cast.actorName && `(${cast.actorName})`}
-                                </button>
-                              ))
-                            ) : (
-                              <div className="px-4 py-2 text-sm text-text-tertiary">No results found</div>
-                            )}
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </div>
-
-                {/* Crew */}
-                <div>
-                  <label className="block text-sm font-medium text-text-secondary mb-2">
-                    Crew
-                  </label>
-                  <div className="space-y-2">
-                    {selectedCrew.length > 0 && (
-                      <div className="space-y-1">
-                        {selectedCrew.map((crew) => (
-                          <div
-                            key={crew.id}
-                            className="flex items-center justify-between px-3 py-1.5 bg-background-tertiary rounded-lg border border-border-default"
-                          >
-                            <span className="text-sm text-text-primary">{crew.name} - {crew.role}</span>
-                            <button
-                              type="button"
-                              onClick={() => removeCrew(crew.id)}
-                              className="text-text-tertiary hover:text-error transition-colors"
-                            >
-                              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                              </svg>
-                            </button>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                    <div className="relative">
-                      <button
-                        type="button"
-                        onClick={() => setShowCrewDropdown(!showCrewDropdown)}
-                        className="btn-secondary flex items-center gap-2 w-full"
-                      >
-                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                        </svg>
-                        Add Crew
-                      </button>
-                      {showCrewDropdown && (
-                        <div className="absolute z-10 mt-2 w-full bg-background-primary border border-border-default rounded-lg shadow-xl max-h-60 overflow-hidden flex flex-col">
-                          <input
-                            type="text"
-                            placeholder="Search crew..."
-                            value={crewSearch}
-                            onChange={(e) => setCrewSearch(e.target.value)}
-                            onClick={(e) => e.stopPropagation()}
-                            className="px-3 py-2 border-b border-border-default bg-background-secondary text-text-primary text-sm focus:outline-none focus:border-accent-primary"
-                          />
-                          <div className="overflow-y-auto max-h-48">
-                            {filteredCrew.length > 0 ? (
-                              filteredCrew.map((crew) => (
-                                <button
-                                  key={crew.id}
-                                  type="button"
-                                  onClick={() => {
-                                    addCrew(crew.id);
-                                    setCrewSearch('');
-                                  }}
-                                  className="w-full text-left px-4 py-2 hover:bg-background-tertiary text-sm text-text-primary transition-colors"
-                                >
-                                  {crew.name} - {crew.role}
-                                </button>
-                              ))
-                            ) : (
-                              <div className="px-4 py-2 text-sm text-text-tertiary">No results found</div>
-                            )}
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </div>
-
-                {/* Equipment */}
-                <div>
-                  <label className="block text-sm font-medium text-text-secondary mb-2">
-                    Equipment
-                  </label>
-                  <div className="space-y-2">
-                    {selectedEquipment.length > 0 && (
-                      <div className="space-y-1">
-                        {selectedEquipment.map((eq) => (
-                          <div
-                            key={eq.id}
-                            className="flex items-center justify-between px-3 py-1.5 bg-background-tertiary rounded-lg border border-border-default"
-                          >
-                            <span className="text-sm text-text-primary">{eq.name}</span>
-                            <button
-                              type="button"
-                              onClick={() => removeEquipment(eq.id)}
-                              className="text-text-tertiary hover:text-error transition-colors"
-                            >
-                              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                              </svg>
-                            </button>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                    <div className="relative">
-                      <button
-                        type="button"
-                        onClick={() => setShowEquipmentDropdown(!showEquipmentDropdown)}
-                        className="btn-secondary flex items-center gap-2 w-full"
-                      >
-                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                        </svg>
-                        Add Equipment
-                      </button>
-                      {showEquipmentDropdown && (
-                        <div className="absolute z-10 mt-2 w-full bg-background-primary border border-border-default rounded-lg shadow-xl max-h-60 overflow-hidden flex flex-col">
-                          <input
-                            type="text"
-                            placeholder="Search equipment..."
-                            value={equipmentSearch}
-                            onChange={(e) => setEquipmentSearch(e.target.value)}
-                            onClick={(e) => e.stopPropagation()}
-                            className="px-3 py-2 border-b border-border-default bg-background-secondary text-text-primary text-sm focus:outline-none focus:border-accent-primary"
-                          />
-                          <div className="overflow-y-auto max-h-48">
-                            {filteredEquipment.length > 0 ? (
-                              filteredEquipment.map((eq) => (
-                                <button
-                                  key={eq.id}
-                                  type="button"
-                                  onClick={() => {
-                                    addEquipment(eq.id);
-                                    setEquipmentSearch('');
-                                  }}
-                                  className="w-full text-left px-4 py-2 hover:bg-background-tertiary text-sm text-text-primary transition-colors"
-                                >
-                                  {eq.name}
-                                </button>
-                              ))
-                            ) : (
-                              <div className="px-4 py-2 text-sm text-text-tertiary">No results found</div>
-                            )}
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Production Details */}
-            <div>
-              <h3 className="text-lg font-semibold text-text-primary mb-4">Production Details</h3>
-              <div className="space-y-4">
-                <div>
-                  <label className="flex items-center gap-2">
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={() => setShowCastDropdown(!showCastDropdown)}
+                  className="btn-secondary text-sm"
+                >
+                  + Add Cast
+                </button>
+                {showCastDropdown && (
+                  <div className="absolute z-10 mt-1 w-64 bg-background-secondary border border-border-default rounded-lg shadow-lg max-h-48 overflow-y-auto">
                     <input
-                      type="checkbox"
-                      checked={formData.stuntsRequired}
-                      onChange={(e) => setFormData({ ...formData, stuntsRequired: e.target.checked })}
-                      className="rounded"
+                      type="text"
+                      value={castSearch}
+                      onChange={(e) => setCastSearch(e.target.value)}
+                      placeholder="Search cast..."
+                      className="w-full px-3 py-2 border-b border-border-default bg-transparent text-text-primary focus:outline-none"
                     />
-                    <span className="text-sm font-medium text-text-secondary">Stunts Required</span>
-                  </label>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-text-secondary mb-2">
-                    Continuity Notes
-                  </label>
-                  <textarea
-                    value={formData.continuityNotes}
-                    onChange={(e) => setFormData({ ...formData, continuityNotes: e.target.value })}
-                    rows={3}
-                    className="w-full px-4 py-2 bg-background-secondary border border-border-default rounded-lg text-text-primary focus:outline-none focus:border-accent-primary"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-text-secondary mb-2">
-                    Special Requirements
-                  </label>
-                  <textarea
-                    value={formData.specialRequirements}
-                    onChange={(e) => setFormData({ ...formData, specialRequirements: e.target.value })}
-                    rows={3}
-                    className="w-full px-4 py-2 bg-background-secondary border border-border-default rounded-lg text-text-primary focus:outline-none focus:border-accent-primary"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-text-secondary mb-2">
-                    VFX Notes
-                  </label>
-                  <textarea
-                    value={formData.vfxNotes}
-                    onChange={(e) => setFormData({ ...formData, vfxNotes: e.target.value })}
-                    rows={3}
-                    className="w-full px-4 py-2 bg-background-secondary border border-border-default rounded-lg text-text-primary focus:outline-none focus:border-accent-primary"
-                  />
-                </div>
+                    {castMembers
+                      .filter(c => (c.characterName || c.name || '').toLowerCase().includes(castSearch.toLowerCase()))
+                      .filter(c => !formData.castIds.includes(c.id))
+                      .map(cast => (
+                        <button
+                          key={cast.id}
+                          type="button"
+                          onClick={() => addCast(cast.id)}
+                          className="w-full px-3 py-2 text-left text-text-primary hover:bg-background-primary text-sm"
+                        >
+                          {cast.characterName || cast.name}
+                        </button>
+                      ))}
+                  </div>
+                )}
               </div>
+            </div>
+
+            {/* Crew */}
+            <div>
+              <label className="block text-sm font-medium text-text-secondary mb-2">
+                Crew
+              </label>
+              <div className="flex flex-wrap gap-2 mb-2">
+                {formData.crewIds.map(id => {
+                  const crew = crewMembers.find(c => c.id === id);
+                  return crew ? (
+                    <span key={id} className="inline-flex items-center gap-1 px-2 py-1 bg-purple-500/20 text-purple-400 rounded text-sm">
+                      {crew.name} ({crew.role})
+                      <button type="button" onClick={() => removeCrew(id)} className="hover:text-error">×</button>
+                    </span>
+                  ) : null;
+                })}
+              </div>
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={() => setShowCrewDropdown(!showCrewDropdown)}
+                  className="btn-secondary text-sm"
+                >
+                  + Add Crew
+                </button>
+                {showCrewDropdown && (
+                  <div className="absolute z-10 mt-1 w-64 bg-background-secondary border border-border-default rounded-lg shadow-lg max-h-48 overflow-y-auto">
+                    <input
+                      type="text"
+                      value={crewSearch}
+                      onChange={(e) => setCrewSearch(e.target.value)}
+                      placeholder="Search crew..."
+                      className="w-full px-3 py-2 border-b border-border-default bg-transparent text-text-primary focus:outline-none"
+                    />
+                    {crewMembers
+                      .filter(c => (c.name || '').toLowerCase().includes(crewSearch.toLowerCase()))
+                      .filter(c => !formData.crewIds.includes(c.id))
+                      .map(crew => (
+                        <button
+                          key={crew.id}
+                          type="button"
+                          onClick={() => addCrew(crew.id)}
+                          className="w-full px-3 py-2 text-left text-text-primary hover:bg-background-primary text-sm"
+                        >
+                          {crew.name} ({crew.role})
+                        </button>
+                      ))}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Equipment */}
+            <div>
+              <label className="block text-sm font-medium text-text-secondary mb-2">
+                Equipment
+              </label>
+              <div className="flex flex-wrap gap-2 mb-2">
+                {formData.equipmentIds.map(id => {
+                  const eq = equipment.find(e => e.id === id);
+                  return eq ? (
+                    <span key={id} className="inline-flex items-center gap-1 px-2 py-1 bg-orange-500/20 text-orange-400 rounded text-sm">
+                      {eq.name}
+                      <button type="button" onClick={() => removeEquipment(id)} className="hover:text-error">×</button>
+                    </span>
+                  ) : null;
+                })}
+              </div>
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={() => setShowEquipmentDropdown(!showEquipmentDropdown)}
+                  className="btn-secondary text-sm"
+                >
+                  + Add Equipment
+                </button>
+                {showEquipmentDropdown && (
+                  <div className="absolute z-10 mt-1 w-64 bg-background-secondary border border-border-default rounded-lg shadow-lg max-h-48 overflow-y-auto">
+                    <input
+                      type="text"
+                      value={equipmentSearch}
+                      onChange={(e) => setEquipmentSearch(e.target.value)}
+                      placeholder="Search equipment..."
+                      className="w-full px-3 py-2 border-b border-border-default bg-transparent text-text-primary focus:outline-none"
+                    />
+                    {equipment
+                      .filter(e => (e.name || '').toLowerCase().includes(equipmentSearch.toLowerCase()))
+                      .filter(e => !formData.equipmentIds.includes(e.id))
+                      .map(eq => (
+                        <button
+                          key={eq.id}
+                          type="button"
+                          onClick={() => addEquipment(eq.id)}
+                          className="w-full px-3 py-2 text-left text-text-primary hover:bg-background-primary text-sm"
+                        >
+                          {eq.name}
+                        </button>
+                      ))}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Shooting Days */}
+            <div>
+              <label className="block text-sm font-medium text-text-secondary mb-2">
+                Shooting Days
+              </label>
+              <div className="flex flex-wrap gap-2 mb-2">
+                {formData.shootingDayIds.map(id => {
+                  const day = schedule?.days?.find((d: any) => d.id === id);
+                  return day ? (
+                    <span key={id} className="inline-flex items-center gap-1 px-2 py-1 bg-green-500/20 text-green-400 rounded text-sm">
+                      Day {day.dayNumber} - {new Date(day.date).toLocaleDateString()}
+                      <button type="button" onClick={() => removeShootingDay(id)} className="hover:text-error">×</button>
+                    </span>
+                  ) : null;
+                })}
+              </div>
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={() => setShowShootingDayDropdown(!showShootingDayDropdown)}
+                  className="btn-secondary text-sm"
+                >
+                  + Add Shooting Day
+                </button>
+                {showShootingDayDropdown && (
+                  <div className="absolute z-10 mt-1 w-64 bg-background-secondary border border-border-default rounded-lg shadow-lg max-h-48 overflow-y-auto">
+                    {(schedule?.days || [])
+                      .filter((d: any) => !formData.shootingDayIds.includes(d.id))
+                      .map((day: any) => (
+                        <button
+                          key={day.id}
+                          type="button"
+                          onClick={() => addShootingDay(day.id)}
+                          className="w-full px-3 py-2 text-left text-text-primary hover:bg-background-primary text-sm"
+                        >
+                          Day {day.dayNumber} - {new Date(day.date).toLocaleDateString()}
+                        </button>
+                      ))}
+                    {(schedule?.days || []).filter((d: any) => !formData.shootingDayIds.includes(d.id)).length === 0 && (
+                      <div className="px-3 py-2 text-text-tertiary text-sm">No shooting days available</div>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Production Notes */}
+            <div>
+              <label className="block text-sm font-medium text-text-secondary mb-2">
+                Visual Notes
+              </label>
+              <textarea
+                value={formData.visualNotes}
+                onChange={(e) => setFormData({ ...formData, visualNotes: e.target.value })}
+                placeholder="Camera angles, lighting, etc."
+                rows={2}
+                className="w-full px-4 py-2 bg-background-secondary border border-border-default rounded-lg text-text-primary focus:outline-none focus:border-accent-primary resize-none"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-text-secondary mb-2">
+                Continuity Notes
+              </label>
+              <textarea
+                value={formData.continuityNotes}
+                onChange={(e) => setFormData({ ...formData, continuityNotes: e.target.value })}
+                placeholder="Important details for continuity"
+                rows={2}
+                className="w-full px-4 py-2 bg-background-secondary border border-border-default rounded-lg text-text-primary focus:outline-none focus:border-accent-primary resize-none"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-text-secondary mb-2">
+                Special Requirements
+              </label>
+              <textarea
+                value={formData.specialRequirements}
+                onChange={(e) => setFormData({ ...formData, specialRequirements: e.target.value })}
+                placeholder="Permits, safety, special effects, etc."
+                rows={2}
+                className="w-full px-4 py-2 bg-background-secondary border border-border-default rounded-lg text-text-primary focus:outline-none focus:border-accent-primary resize-none"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-text-secondary mb-2">
+                VFX Notes
+              </label>
+              <textarea
+                value={formData.vfxNotes}
+                onChange={(e) => setFormData({ ...formData, vfxNotes: e.target.value })}
+                placeholder="Visual effects requirements"
+                rows={2}
+                className="w-full px-4 py-2 bg-background-secondary border border-border-default rounded-lg text-text-primary focus:outline-none focus:border-accent-primary resize-none"
+              />
             </div>
           </form>
+          )}
+
+          {/* Continuity Tab */}
+          {activeTab === 'continuity' && scene && (
+            <ContinuityPanel
+              scene={scene}
+              previousScene={previousScene}
+              nextScene={nextScene}
+              onUpdateContinuity={handleUpdateContinuity}
+            />
+          )}
+
+          {/* Comments Tab */}
+          {activeTab === 'comments' && scene && (
+            <CommentsPanel
+              entityId={scene.id}
+              entityType="scene"
+              comments={comments}
+              onAddComment={handleAddComment}
+              onResolveComment={handleResolveComment}
+              onReplyComment={handleReplyComment}
+              teamMembers={[...castMembers, ...crewMembers]}
+            />
+          )}
         </div>
 
         <div className="p-6 border-t border-border-default flex justify-between items-center">
-          <div>
-            {scene && (formData.shootingDayIds.length > 0 || (scene.shootingDayIds && scene.shootingDayIds.length > 0)) && (
-              <button
-                type="button"
-                onClick={() => {
-                  const sceneId = scene.id;
-                  syncScene.mutate({ sceneId });
-                }}
-                disabled={syncScene.isPending}
-                className="btn-secondary flex items-center gap-2"
-              >
-                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                </svg>
-                {syncScene.isPending ? 'Syncing...' : 'Sync to Schedule'}
-              </button>
-            )}
-          </div>
           <div className="flex gap-3">
             <button
               type="button"

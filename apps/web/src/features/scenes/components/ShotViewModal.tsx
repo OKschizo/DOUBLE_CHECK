@@ -1,10 +1,10 @@
 'use client';
 
-import { trpc } from '@/lib/trpc/client';
 import { getProjectTerminology } from '@/shared/utils/projectTerminology';
 import { isFirebaseStorageUrl } from '@/lib/firebase/storage';
 import type { Shot } from '@/lib/schemas';
 import Image from 'next/image';
+import { useProject } from '@/features/projects/hooks/useProjects';
 
 interface ShotViewModalProps {
   shot: Shot;
@@ -31,8 +31,7 @@ export function ShotViewModal({
   onEdit,
   onNavigate,
 }: ShotViewModalProps) {
-  const utils = trpc.useUtils();
-  const { data: project } = trpc.projects.getById.useQuery({ id: projectId });
+  const { data: project } = useProject(projectId);
   const terminology = getProjectTerminology(project?.projectType);
 
   const handleNavigate = (view: string, elementId?: string) => {

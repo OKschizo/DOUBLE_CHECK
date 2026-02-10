@@ -1,30 +1,102 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useCrewByProject, useCreateCrewMember, useUpdateCrewMember, useDeleteCrewMember } from '@/features/crew/hooks/useCrew';
 import { CrewTemplates } from '@/features/crew/components/CrewTemplates';
 import { useProject, useUpdateProject } from '@/features/projects/hooks/useProjects';
 import { useAuth } from '@/features/auth/hooks/useAuth';
 import { uploadImage, deleteImage, generateUniqueFilename, isBlobUrl } from '@/lib/firebase/storage';
+import { DEPARTMENTS_AND_ROLES, getRolesForDepartment, getDepartmentIcon } from '@/features/crew/data/departmentsAndRoles';
 
 interface CrewViewProps {
   projectId: string;
 }
 
-const DEPARTMENTS = [
-  'Production',
-  'Direction',
-  'Art',
-  'Camera',
-  'Sound',
-  'Lighting',
-  'Grip',
-  'Costume',
-  'Hair & Makeup',
-  'Locations',
-  'Transportation',
-  'Catering',
-  'Post-Production',
-  'Other',
-];
+// Role Browser Component for exploring roles by department
+function RoleBrowser({ 
+  departments, 
+  onSelectRole 
+}: { 
+  departments: typeof DEPARTMENTS_AND_ROLES;
+  onSelectRole: (role: string, department: string) => void;
+}) {
+  const [expandedDept, setExpandedDept] = useState<string | null>(null);
+  const [searchRoles, setSearchRoles] = useState('');
+
+  // Filter departments and roles based on search
+  const filteredDepts = searchRoles
+    ? departments.filter(dept => 
+        dept.name.toLowerCase().includes(searchRoles.toLowerCase()) ||
+        dept.roles.some(role => role.name.toLowerCase().includes(searchRoles.toLowerCase()))
+      )
+    : departments;
+
+  return (
+    <div className="space-y-2">
+      {/* Search roles */}
+      <input
+        type="text"
+        placeholder="Search roles..."
+        value={searchRoles}
+        onChange={(e) => setSearchRoles(e.target.value)}
+        className="w-full px-3 py-2 bg-background-primary border border-border-default rounded-lg text-text-primary placeholder-text-tertiary text-sm focus:outline-none focus:ring-2 focus:ring-accent-primary"
+      />
+      
+      {/* Department list with expandable roles */}
+      <div className="max-h-48 overflow-y-auto space-y-1">
+        {filteredDepts.map((dept) => {
+          const isExpanded = expandedDept === dept.name;
+          const filteredRoles = searchRoles
+            ? dept.roles.filter(r => r.name.toLowerCase().includes(searchRoles.toLowerCase()))
+            : dept.roles;
+          
+          // Auto-expand if searching and has matching roles
+          const shouldShow = searchRoles ? filteredRoles.length > 0 : true;
+          if (!shouldShow) return null;
+
+          return (
+            <div key={dept.name} className="border border-border-default rounded-lg overflow-hidden">
+              <button
+                onClick={() => setExpandedDept(isExpanded ? null : dept.name)}
+                className="w-full flex items-center justify-between px-3 py-2 bg-background-tertiary hover:bg-background-primary transition-colors text-left"
+              >
+                <span className="text-sm font-medium text-text-primary">
+                  {dept.icon} {dept.name}
+                </span>
+                <span className="text-xs text-text-tertiary">
+                  {filteredRoles.length} roles {isExpanded ? '▼' : '▶'}
+                </span>
+              </button>
+              {(isExpanded || searchRoles) && filteredRoles.length > 0 && (
+                <div className="bg-background-primary border-t border-border-default">
+                  {filteredRoles.slice(0, searchRoles ? filteredRoles.length : 8).map((role) => (
+                    <button
+                      key={role.id}
+                      onClick={() => onSelectRole(role.name, dept.name)}
+                      className="w-full px-4 py-1.5 text-left text-xs text-text-secondary hover:bg-accent-primary/10 hover:text-accent-primary transition-colors"
+                    >
+                      {role.name}
+                    </button>
+                  ))}
+                  {!searchRoles && filteredRoles.length > 8 && (
+                    <div className="px-4 py-1.5 text-xs text-text-tertiary">
+                      +{filteredRoles.length - 8} more roles
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+      
+      {filteredDepts.length === 0 && (
+        <p className="text-xs text-text-tertiary text-center py-2">No roles found</p>
+      )}
+    </div>
+  );
+}
+
+// Get department names from comprehensive list plus 'Other' for custom
+const DEPARTMENTS = [...DEPARTMENTS_AND_ROLES.map(d => d.name), 'Other'];
 
 export function CrewView({ projectId }: CrewViewProps) {
   const { firebaseUser, user: firestoreUser } = useAuth();
@@ -38,6 +110,17 @@ export function CrewView({ projectId }: CrewViewProps) {
   const [editingMember, setEditingMember] = useState<any>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
+  const [showMobileFilters, setShowMobileFilters] = useState(false);
+  const [showMobileMenu, setShowMobileMenu] = useState(false);
+  const [expandedCards, setExpandedCards] = useState<Set<string>>(new Set());
+  
+  // Filtering state
+  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedDepartments, setSelectedDepartments] = useState<Set<string>>(new Set(DEPARTMENTS));
+  const [departmentsInitialized, setDepartmentsInitialized] = useState(false);
+  const [useCustomRole, setUseCustomRole] = useState(false);
+  const [customRole, setCustomRole] = useState('');
+  
   const [formData, setFormData] = useState({
     name: '',
     role: '',
@@ -222,10 +305,10 @@ export function CrewView({ projectId }: CrewViewProps) {
   };
 
   const handleSelectAll = () => {
-    if (selectedCrewMembers.size === crewMembers.length) {
+    if (selectedCrewMembers.size === filteredCrewMembers.length) {
       setSelectedCrewMembers(new Set());
     } else {
-      setSelectedCrewMembers(new Set(crewMembers.map(m => m.id)));
+      setSelectedCrewMembers(new Set(filteredCrewMembers.map((m: any) => m.id)));
     }
   };
 
@@ -244,91 +327,206 @@ export function CrewView({ projectId }: CrewViewProps) {
     setShowEditModal(true);
   };
 
-  // Combine default and custom departments
-  const allDepartments = [
-    ...DEPARTMENTS,
-    ...(project?.customCrewDepartments || []),
-  ].sort();
+  // Get all unique departments from actual crew data + predefined + custom
+  const allDepartments = useMemo(() => {
+    const crewDepartments = crewMembers.map((m: any) => m.department).filter(Boolean);
+    const customDepartments = project?.customCrewDepartments || [];
+    return [...new Set([...DEPARTMENTS, ...crewDepartments, ...customDepartments])].sort();
+  }, [crewMembers, project?.customCrewDepartments]);
 
-  // Group crew by department
-  const crewByDept = crewMembers.reduce((acc: any, member: any) => {
+  // Auto-select all departments (including from data) when crew loads
+  useEffect(() => {
+    if (!departmentsInitialized && crewMembers.length > 0) {
+      setSelectedDepartments(new Set(allDepartments));
+      setDepartmentsInitialized(true);
+    }
+  }, [crewMembers, allDepartments, departmentsInitialized]);
+
+  // Filter crew members by search and selected departments
+  const filteredCrewMembers = crewMembers.filter((member: any) => {
+    // Filter by department
+    if (!selectedDepartments.has(member.department)) return false;
+    
+    // Filter by search query
+    if (searchQuery) {
+      const query = searchQuery.toLowerCase();
+      return (
+        member.name?.toLowerCase().includes(query) ||
+        member.role?.toLowerCase().includes(query) ||
+        member.email?.toLowerCase().includes(query)
+      );
+    }
+    return true;
+  });
+
+  // Group filtered crew by department
+  const crewByDept = filteredCrewMembers.reduce((acc: any, member: any) => {
     const dept = member.department;
     if (!acc[dept]) acc[dept] = [];
     acc[dept].push(member);
     return acc;
   }, {});
 
+  // Get count per department (from all members, not filtered)
+  const getDepartmentCount = (dept: string) => {
+    return crewMembers.filter((m: any) => m.department === dept).length;
+  };
+
+  // Toggle department filter
+  const toggleDepartment = (dept: string) => {
+    const newSelected = new Set(selectedDepartments);
+    if (newSelected.has(dept)) {
+      newSelected.delete(dept);
+    } else {
+      newSelected.add(dept);
+    }
+    setSelectedDepartments(newSelected);
+  };
+
+  // Select/deselect all departments
+  const selectAllDepartments = () => setSelectedDepartments(new Set(allDepartments));
+  const deselectAllDepartments = () => setSelectedDepartments(new Set());
+
+  // Get roles for selected department in form
+  const availableRoles = formData.department ? getRolesForDepartment(formData.department) : [];
+
   if (isLoading) {
     return <div className="text-center py-10 text-text-secondary">Loading crew...</div>;
   }
 
   return (
-    <div className="flex h-full">
-      <div className="flex-1 overflow-y-auto p-8">
-        <div className="mb-8">
-          <div className="flex justify-between items-center mb-4">
+    <div className="flex flex-col md:flex-row h-full relative">
+      {/* Mobile Filter Toggle Button */}
+      <button
+        onClick={() => setShowMobileFilters(true)}
+        className="md:hidden fixed bottom-20 right-4 z-30 w-14 h-14 bg-accent-primary rounded-full shadow-lg flex items-center justify-center text-white"
+        aria-label="Open filters"
+      >
+        <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
+        </svg>
+      </button>
+
+      <div className="flex-1 overflow-y-auto p-4 md:p-8 pb-24 md:pb-8">
+        <div className="mb-6 md:mb-8">
+          <div className="flex items-start justify-between mb-4">
             <div>
-              <h1 className="text-3xl font-bold mb-2 text-text-primary">Crew Management</h1>
-              <p className="text-text-secondary">
-                {crewMembers.length} crew members
+              <h1 className="text-2xl md:text-3xl font-bold mb-1 text-text-primary">Crew</h1>
+              <p className="text-text-secondary text-sm">
+                {filteredCrewMembers.length} of {crewMembers.length} members
+                {searchQuery && <span className="text-accent-primary"> • &quot;{searchQuery}&quot;</span>}
               </p>
             </div>
-            <div className="flex gap-3">
+            {/* Mobile overflow menu */}
+            <div className="relative md:hidden">
               <button
-                onClick={() => {
-                  if (!showAddForm) {
-                      setFormData({
-                        name: '',
-                        role: '',
-                        department: '',
-                        email: '',
-                        phone: '',
-                        rate: '',
-                        photoUrl: '',
-                      });
-                  }
-                  setShowAddForm(!showAddForm);
-                }}
-                className="btn-primary"
+                onClick={() => setShowMobileMenu(!showMobileMenu)}
+                className="p-3 rounded-lg bg-background-secondary border border-border-default"
               >
-                + Add Crew Member
+                <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+                  <circle cx="12" cy="5" r="2"/>
+                  <circle cx="12" cy="12" r="2"/>
+                  <circle cx="12" cy="19" r="2"/>
+                </svg>
               </button>
-              <button
-                className="px-4 py-2 bg-background-secondary border border-border-default rounded-lg hover:bg-background-tertiary transition-colors text-text-primary font-medium"
-                onClick={() => setShowTemplatesModal(true)}
-              >
-                📋 Apply Template
-              </button>
-              <div className="flex items-center gap-2 border border-border-default rounded-lg p-1 bg-background-secondary">
-                <button
-                  onClick={() => setViewMode('grid')}
-                  className={`px-3 py-1 rounded transition-colors ${
-                    viewMode === 'grid' 
-                      ? 'bg-accent-primary' 
-                      : 'text-text-secondary hover:text-text-primary'
-                  }`}
-                  style={viewMode === 'grid' ? { color: 'rgb(var(--colored-button-text))' } : undefined}
-                >
-                  Grid
-                </button>
-                <button
-                  onClick={() => setViewMode('list')}
-                  className={`px-3 py-1 rounded transition-colors ${
-                    viewMode === 'list' 
-                      ? 'bg-accent-primary' 
-                      : 'text-text-secondary hover:text-text-primary'
-                  }`}
-                  style={viewMode === 'list' ? { color: 'rgb(var(--colored-button-text))' } : undefined}
-                >
-                  List
-                </button>
-              </div>
+              {showMobileMenu && (
+                <>
+                  <div className="fixed inset-0 z-40" onClick={() => setShowMobileMenu(false)} />
+                  <div className="absolute right-0 top-full mt-2 w-56 bg-background-secondary border border-border-default rounded-lg shadow-xl z-50 overflow-hidden">
+                    <button
+                      onClick={() => { setShowMobileMenu(false); setShowTemplatesModal(true); }}
+                      className="w-full px-4 py-3 text-left text-sm hover:bg-background-tertiary flex items-center gap-3"
+                    >
+                      <span className="text-lg">📋</span> Apply Template
+                    </button>
+                    <div className="border-t border-border-default" />
+                    <button
+                      onClick={() => { setShowMobileMenu(false); setShowAddDeptModal(true); }}
+                      className="w-full px-4 py-3 text-left text-sm hover:bg-background-tertiary flex items-center gap-3"
+                    >
+                      <span className="text-lg">➕</span> Add Department
+                    </button>
+                  </div>
+                </>
+              )}
             </div>
           </div>
+          
+          {/* Desktop action buttons */}
+          <div className="hidden md:flex flex-wrap gap-3 mb-4">
+            <button
+              onClick={() => {
+                if (!showAddForm) {
+                    setFormData({
+                      name: '',
+                      role: '',
+                      department: '',
+                      email: '',
+                      phone: '',
+                      rate: '',
+                      photoUrl: '',
+                    });
+                }
+                setShowAddForm(!showAddForm);
+              }}
+              className="btn-primary"
+            >
+              + Add Crew Member
+            </button>
+            <button
+              className="btn-secondary"
+              onClick={() => setShowTemplatesModal(true)}
+            >
+              📋 Apply Template
+            </button>
+            <div className="flex items-center gap-2 border border-border-default rounded-lg p-1 bg-background-secondary">
+              <button
+                onClick={() => setViewMode('grid')}
+                className={`px-3 py-1 rounded transition-colors ${
+                  viewMode === 'grid' 
+                    ? 'bg-accent-primary' 
+                    : 'text-text-secondary hover:text-text-primary'
+                }`}
+                style={viewMode === 'grid' ? { color: 'rgb(var(--colored-button-text))' } : undefined}
+              >
+                Grid
+              </button>
+              <button
+                onClick={() => setViewMode('list')}
+                className={`px-3 py-1 rounded transition-colors ${
+                  viewMode === 'list' 
+                    ? 'bg-accent-primary' 
+                    : 'text-text-secondary hover:text-text-primary'
+                }`}
+                style={viewMode === 'list' ? { color: 'rgb(var(--colored-button-text))' } : undefined}
+              >
+                List
+              </button>
+            </div>
+          </div>
+          
+          {/* Mobile primary action - Add Crew */}
+          <button 
+            onClick={() => {
+              setFormData({
+                name: '',
+                role: '',
+                department: '',
+                email: '',
+                phone: '',
+                rate: '',
+                photoUrl: '',
+              });
+              setShowAddForm(true);
+            }} 
+            className="md:hidden w-full btn-primary py-3 text-base font-semibold mb-4"
+          >
+            + Add Crew Member
+          </button>
 
-          {/* Bulk Actions */}
+          {/* Desktop Bulk Actions */}
           {selectedCrewMembers.size > 0 && (
-            <div className="bg-accent-primary/10 border border-accent-primary/30 rounded-lg p-4 mb-4 flex items-center justify-between">
+            <div className="hidden md:flex bg-accent-primary/10 border border-accent-primary/30 rounded-lg p-4 mb-4 items-center justify-between">
               <div className="flex items-center gap-3">
                 <span className="font-semibold text-text-primary">
                   {selectedCrewMembers.size} selected
@@ -361,7 +559,7 @@ export function CrewView({ projectId }: CrewViewProps) {
 
         {/* Add Form */}
         {showAddForm && (
-          <div className="card-elevated p-6 mb-8">
+          <div className="card-elevated p-4 md:p-6 mb-6 md:mb-8">
             <h3 className="text-lg font-bold mb-4 text-text-primary">Add New Crew Member</h3>
             <form onSubmit={handleAddSubmit} className="space-y-4">
               {/* Photo Upload */}
@@ -420,7 +618,7 @@ export function CrewView({ projectId }: CrewViewProps) {
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-text-primary mb-2">Name</label>
                   <input
@@ -433,13 +631,51 @@ export function CrewView({ projectId }: CrewViewProps) {
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-text-primary mb-2">Role</label>
-                  <input
-                    type="text"
-                    required
-                    className="input-field"
-                    value={formData.role}
-                    onChange={(e) => setFormData({ ...formData, role: e.target.value })}
-                  />
+                  {availableRoles.length > 0 && !useCustomRole ? (
+                    <div className="space-y-2">
+                      <select
+                        required
+                        className="input-field"
+                        value={formData.role}
+                        onChange={(e) => setFormData({ ...formData, role: e.target.value })}
+                      >
+                        <option value="">Select a role...</option>
+                        {availableRoles.map((r) => (
+                          <option key={r.id} value={r.name}>{r.name}</option>
+                        ))}
+                      </select>
+                      <button
+                        type="button"
+                        onClick={() => setUseCustomRole(true)}
+                        className="text-xs text-accent-primary hover:text-accent-hover"
+                      >
+                        + Custom Role
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      <input
+                        type="text"
+                        required
+                        placeholder="Enter custom role..."
+                        className="input-field"
+                        value={formData.role}
+                        onChange={(e) => setFormData({ ...formData, role: e.target.value })}
+                      />
+                      {availableRoles.length > 0 && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setUseCustomRole(false);
+                            setFormData({ ...formData, role: '' });
+                          }}
+                          className="text-xs text-accent-primary hover:text-accent-hover"
+                        >
+                          ← Select from list
+                        </button>
+                      )}
+                    </div>
+                  )}
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-text-primary mb-2">Department</label>
@@ -495,71 +731,62 @@ export function CrewView({ projectId }: CrewViewProps) {
           </div>
         )}
 
-        {/* Crew List */}
-        <div className="space-y-8">
+        {/* Crew List - Compact Grid */}
+        <div className="space-y-6">
           {Object.entries(crewByDept).map(([dept, members]: [string, any]) => (
             <div key={dept}>
-              <div className="flex items-center gap-3 mb-4">
-                <h2 className="text-xl font-bold text-text-primary">{dept}</h2>
-                <span className="badge-primary">{members.length}</span>
+              <div className="flex items-center gap-2 mb-3">
+                <h2 className="text-sm md:text-base font-semibold text-text-primary">{dept}</h2>
+                <span className="text-xs px-1.5 py-0.5 bg-background-secondary rounded text-text-tertiary">{members.length}</span>
               </div>
-              <div className={`grid ${viewMode === 'grid' ? 'grid-cols-1 md:grid-cols-2 lg:grid-cols-3' : 'grid-cols-1'} gap-4`}>
+              {/* Compact 2-col on mobile, 3-4 col on larger */}
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2 md:gap-3">
                 {members.map((member: any) => (
                   <div 
                     key={member.id} 
-                    className={`card p-4 relative ${selectedCrewMembers.has(member.id) ? 'ring-2 ring-accent-primary border-accent-primary' : ''}`}
+                    onClick={() => handleEdit(member)}
+                    className={`bg-background-secondary border border-border-subtle rounded-lg p-2.5 md:p-3 cursor-pointer hover:border-accent-primary/50 transition-all ${selectedCrewMembers.has(member.id) ? 'ring-2 ring-accent-primary border-accent-primary' : ''}`}
                   >
-                    <div className="flex items-start gap-4">
+                    {/* Compact card content */}
+                    <div className="flex items-start gap-2">
+                      {/* Checkbox - compact */}
                       <input
                         type="checkbox"
                         checked={selectedCrewMembers.has(member.id)}
-                        onChange={() => handleToggleSelect(member.id)}
-                        className="mt-1 w-4 h-4"
+                        onChange={(e) => {
+                          e.stopPropagation();
+                          handleToggleSelect(member.id);
+                        }}
+                        onClick={(e) => e.stopPropagation()}
+                        className="mt-0.5 w-4 h-4 rounded flex-shrink-0"
                       />
-                      {/* Avatar */}
+                      
+                      {/* Avatar - smaller */}
                       <div className="flex-shrink-0">
                         {member.photoUrl ? (
                           <img
                             src={member.photoUrl}
                             alt={member.name}
-                            className="w-12 h-12 rounded-full object-cover"
+                            className="w-8 h-8 rounded-full object-cover"
                           />
                         ) : (
-                          <div className="w-12 h-12 rounded-full bg-gradient-to-br from-accent-primary to-accent-secondary flex items-center justify-center text-white font-bold text-lg">
+                          <div className="w-8 h-8 rounded-full bg-gradient-to-br from-accent-primary to-accent-secondary flex items-center justify-center text-white font-bold text-xs">
                             {member.name.charAt(0).toUpperCase()}
                           </div>
                         )}
                       </div>
-                      <div className="flex-1">
-                        <div className="flex justify-between items-start">
-                          <div>
-                            <h3 className="font-bold text-text-primary">{member.name}</h3>
-                            <p className="text-sm text-accent-primary">{member.role}</p>
-                          </div>
-                          <div className="flex gap-1">
-                            <button
-                              onClick={() => handleEdit(member)}
-                              className="text-text-tertiary hover:text-accent-primary p-1"
-                            >
-                              ✏️
-                            </button>
-                            <button
-                              onClick={() => {
-                                if (confirm('Delete member?')) {
-                                  deleteCrewMember.mutateAsync({ id: member.id });
-                                }
-                              }}
-                              className="text-text-tertiary hover:text-error p-1"
-                            >
-                              🗑️
-                            </button>
-                          </div>
-                        </div>
-                        <div className="mt-2 space-y-1 text-sm text-text-secondary">
-                          {member.email && <div>📧 {member.email}</div>}
-                          {member.phone && <div>📞 {member.phone}</div>}
-                          {member.rate && <div>💰 ${member.rate}/day</div>}
-                        </div>
+                      
+                      <div className="flex-1 min-w-0">
+                        {/* Name - truncated */}
+                        <h3 className="text-xs md:text-sm font-medium text-text-primary truncate leading-tight">{member.name}</h3>
+                        
+                        {/* Role - compact */}
+                        <p className="text-[10px] text-accent-primary truncate">{member.role}</p>
+                        
+                        {/* Rate - if exists */}
+                        {member.rate && (
+                          <div className="text-[10px] text-text-tertiary mt-0.5">${member.rate}/day</div>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -569,32 +796,35 @@ export function CrewView({ projectId }: CrewViewProps) {
           ))}
         </div>
       </div>
-
-      {/* Sidebar */}
-      <aside className="w-80 bg-background-secondary border-l border-border-subtle p-6 overflow-y-auto">
-        <h3 className="text-lg font-bold mb-4 text-text-primary">Departments</h3>
-        <div className="space-y-2">
-          {allDepartments.map(dept => (
-            <div key={dept} className="flex justify-between items-center p-2 hover:bg-background-tertiary rounded">
-              <span className="text-sm text-text-secondary">{dept}</span>
-              {project?.customCrewDepartments?.includes(dept) && (
-                <button 
-                  onClick={() => handleRemoveCustomDepartment(dept)}
-                  className="text-text-tertiary hover:text-error"
-                >
-                  ×
-                </button>
-              )}
-            </div>
-          ))}
-          <button
-            onClick={() => setShowAddDeptModal(true)}
-            className="w-full mt-4 py-2 border-2 border-dashed border-border-default rounded-lg text-sm text-text-secondary hover:border-accent-primary hover:text-accent-primary"
-          >
-            + Add Department
-          </button>
+      
+      {/* Mobile Bottom Action Bar - shown when crew members selected */}
+      {selectedCrewMembers.size > 0 && (
+        <div className="md:hidden fixed bottom-0 left-0 right-0 bg-background-secondary border-t border-border-default p-4 z-30 safe-area-bottom">
+          <div className="flex items-center justify-between mb-3">
+            <span className="text-sm font-medium">{selectedCrewMembers.size} selected</span>
+            <button
+              onClick={() => setSelectedCrewMembers(new Set())}
+              className="text-sm text-text-tertiary"
+            >
+              Clear
+            </button>
+          </div>
+          <div className="flex gap-2">
+            <button
+              onClick={handleBulkCreateBudget}
+              className="flex-1 py-3 bg-accent-primary/20 text-accent-primary rounded-lg font-medium"
+            >
+              Add to Budget
+            </button>
+            <button
+              onClick={handleBulkDelete}
+              className="flex-1 py-3 bg-error/20 text-error rounded-lg font-medium"
+            >
+              Delete
+            </button>
+          </div>
         </div>
-      </aside>
+      )}
 
       {/* Modals */}
       {showEditModal && (
@@ -665,11 +895,48 @@ export function CrewView({ projectId }: CrewViewProps) {
                 </div>
                 <div>
                   <label className="block text-sm font-medium mb-2">Role</label>
-                  <input
-                    className="input-field"
-                    value={formData.role}
-                    onChange={(e) => setFormData({ ...formData, role: e.target.value })}
-                  />
+                  {availableRoles.length > 0 && !useCustomRole ? (
+                    <div className="space-y-2">
+                      <select
+                        className="input-field"
+                        value={formData.role}
+                        onChange={(e) => setFormData({ ...formData, role: e.target.value })}
+                      >
+                        <option value="">Select a role...</option>
+                        {availableRoles.map((r) => (
+                          <option key={r.id} value={r.name}>{r.name}</option>
+                        ))}
+                      </select>
+                      <button
+                        type="button"
+                        onClick={() => setUseCustomRole(true)}
+                        className="text-xs text-accent-primary hover:text-accent-hover"
+                      >
+                        + Custom Role
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      <input
+                        placeholder="Enter custom role..."
+                        className="input-field"
+                        value={formData.role}
+                        onChange={(e) => setFormData({ ...formData, role: e.target.value })}
+                      />
+                      {availableRoles.length > 0 && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setUseCustomRole(false);
+                            setFormData({ ...formData, role: '' });
+                          }}
+                          className="text-xs text-accent-primary hover:text-accent-hover"
+                        >
+                          ← Select from list
+                        </button>
+                      )}
+                    </div>
+                  )}
                 </div>
                 <div>
                   <label className="block text-sm font-medium mb-2">Department</label>
@@ -742,6 +1009,239 @@ export function CrewView({ projectId }: CrewViewProps) {
           onClose={() => setShowTemplatesModal(false)}
         />
       )}
+
+      {/* Mobile Filter Overlay */}
+      {showMobileFilters && (
+        <div className="fixed inset-0 z-50 md:hidden">
+          <div 
+            className="absolute inset-0 bg-black/60" 
+            onClick={() => setShowMobileFilters(false)} 
+          />
+          <aside className="absolute right-0 top-0 bottom-0 w-80 max-w-[90vw] bg-background-secondary overflow-y-auto p-6 animate-in slide-in-from-right">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-bold text-text-primary">Crew Overview</h3>
+              <button
+                onClick={() => setShowMobileFilters(false)}
+                className="p-2 text-text-secondary hover:text-text-primary"
+              >
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            
+            {/* Search */}
+            <div className="mb-6">
+              <label className="block text-sm font-semibold text-text-secondary mb-2">Search</label>
+              <input
+                type="text"
+                placeholder="Search by name, role, email..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full px-3 py-2 bg-background-primary border border-border-default rounded-lg text-text-primary placeholder-text-tertiary focus:outline-none focus:ring-2 focus:ring-accent-primary"
+              />
+            </div>
+
+            {/* Quick Stats */}
+            <div className="mb-6">
+              <h4 className="text-sm font-semibold text-text-secondary mb-3">Quick Stats</h4>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="bg-background-tertiary rounded-lg p-3">
+                  <div className="text-2xl font-bold text-accent-primary">{crewMembers.length}</div>
+                  <div className="text-xs text-text-secondary">Total Crew</div>
+                </div>
+                <div className="bg-background-tertiary rounded-lg p-3">
+                  <div className="text-2xl font-bold text-green-500">{Object.keys(crewByDept).length}</div>
+                  <div className="text-xs text-text-secondary">Departments</div>
+                </div>
+              </div>
+            </div>
+
+            {/* Filter by Department */}
+            <div className="mb-6">
+              <div className="flex items-center justify-between mb-3">
+                <h4 className="text-sm font-semibold text-text-secondary">Filter by Department</h4>
+                <div className="flex gap-2">
+                  <button onClick={selectAllDepartments} className="text-xs text-accent-primary hover:text-accent-hover">All</button>
+                  <button onClick={deselectAllDepartments} className="text-xs text-accent-primary hover:text-accent-hover">None</button>
+                </div>
+              </div>
+              <div className="space-y-1 max-h-48 overflow-y-auto">
+                {allDepartments.map((dept) => {
+                  const count = getDepartmentCount(dept);
+                  const isSelected = selectedDepartments.has(dept);
+                  const icon = getDepartmentIcon(dept);
+                  return (
+                    <label
+                      key={dept}
+                      className={`flex items-center justify-between px-3 py-2 rounded-lg cursor-pointer transition-colors ${
+                        isSelected ? 'bg-accent-primary/10 text-text-primary' : 'hover:bg-background-tertiary text-text-secondary'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="checkbox"
+                          checked={isSelected}
+                          onChange={() => toggleDepartment(dept)}
+                          className="w-4 h-4 rounded border-border-default text-accent-primary focus:ring-accent-primary"
+                        />
+                        <span className="text-sm">{icon} {dept}</span>
+                      </div>
+                      <span className="text-xs text-text-tertiary bg-background-tertiary px-2 py-0.5 rounded">{count}</span>
+                    </label>
+                  );
+                })}
+              </div>
+              <button
+                onClick={() => { setShowAddDeptModal(true); setShowMobileFilters(false); }}
+                className="w-full mt-3 py-2 border-2 border-dashed border-border-default rounded-lg text-xs text-text-secondary hover:border-accent-primary hover:text-accent-primary transition-colors"
+              >
+                + Add Custom Department
+              </button>
+            </div>
+
+            {/* Apply Filters Button */}
+            <button
+              onClick={() => setShowMobileFilters(false)}
+              className="w-full py-3 bg-accent-primary text-white rounded-lg font-medium"
+            >
+              Apply Filters
+            </button>
+          </aside>
+        </div>
+      )}
+
+      {/* Right Sidebar - Crew Overview & Filters (Desktop Only) */}
+      <aside className="hidden md:block w-80 bg-background-secondary border-l border-border-subtle overflow-y-auto p-6">
+        <h3 className="text-lg font-bold mb-4 text-text-primary">Crew Overview</h3>
+        
+        {/* Search */}
+        <div className="mb-6">
+          <label className="block text-sm font-semibold text-text-secondary mb-2">Search</label>
+          <input
+            type="text"
+            placeholder="Search by name, role, email..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="w-full px-3 py-2 bg-background-primary border border-border-default rounded-lg text-text-primary placeholder-text-tertiary focus:outline-none focus:ring-2 focus:ring-accent-primary"
+          />
+        </div>
+
+        {/* Quick Stats */}
+        <div className="mb-6">
+          <h4 className="text-sm font-semibold text-text-secondary mb-3">Quick Stats</h4>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="bg-background-tertiary rounded-lg p-3">
+              <div className="text-2xl font-bold text-accent-primary">{crewMembers.length}</div>
+              <div className="text-xs text-text-secondary">Total Crew</div>
+            </div>
+            <div className="bg-background-tertiary rounded-lg p-3">
+              <div className="text-2xl font-bold text-green-500">
+                {Object.keys(crewByDept).length}
+              </div>
+              <div className="text-xs text-text-secondary">Departments</div>
+            </div>
+          </div>
+        </div>
+
+        {/* Filter by Department */}
+        <div className="mb-6">
+          <div className="flex items-center justify-between mb-3">
+            <h4 className="text-sm font-semibold text-text-secondary">Filter by Department</h4>
+            <div className="flex gap-2">
+              <button
+                onClick={selectAllDepartments}
+                className="text-xs text-accent-primary hover:text-accent-hover"
+              >
+                All
+              </button>
+              <button
+                onClick={deselectAllDepartments}
+                className="text-xs text-accent-primary hover:text-accent-hover"
+              >
+                None
+              </button>
+            </div>
+          </div>
+          <div className="space-y-1 max-h-48 overflow-y-auto">
+            {allDepartments.map((dept) => {
+              const count = getDepartmentCount(dept);
+              const isSelected = selectedDepartments.has(dept);
+              const icon = getDepartmentIcon(dept);
+              const isCustom = project?.customCrewDepartments?.includes(dept);
+              return (
+                <label
+                  key={dept}
+                  className={`flex items-center justify-between px-3 py-2 rounded-lg cursor-pointer transition-colors ${
+                    isSelected
+                      ? 'bg-accent-primary/10 text-text-primary'
+                      : 'hover:bg-background-tertiary text-text-secondary'
+                  }`}
+                >
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={isSelected}
+                      onChange={() => toggleDepartment(dept)}
+                      className="w-4 h-4 rounded border-border-default text-accent-primary focus:ring-accent-primary"
+                    />
+                    <span className="text-sm">{icon} {dept}</span>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <span className="text-xs text-text-tertiary bg-background-tertiary px-2 py-0.5 rounded">
+                      {count}
+                    </span>
+                    {isCustom && (
+                      <button
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          handleRemoveCustomDepartment(dept);
+                        }}
+                        className="text-text-tertiary hover:text-error ml-1"
+                        title="Remove custom department"
+                      >
+                        ×
+                      </button>
+                    )}
+                  </div>
+                </label>
+              );
+            })}
+          </div>
+          <button
+            onClick={() => setShowAddDeptModal(true)}
+            className="w-full mt-3 py-2 border-2 border-dashed border-border-default rounded-lg text-xs text-text-secondary hover:border-accent-primary hover:text-accent-primary transition-colors"
+          >
+            + Add Custom Department
+          </button>
+        </div>
+
+        {/* Browse Roles by Department */}
+        <div className="mb-6">
+          <h4 className="text-sm font-semibold text-text-secondary mb-3">Browse Roles</h4>
+          <RoleBrowser 
+            departments={DEPARTMENTS_AND_ROLES} 
+            onSelectRole={(role, dept) => {
+              setFormData(prev => ({ ...prev, role, department: dept }));
+              setShowAddForm(true);
+            }}
+          />
+        </div>
+
+        {/* Clear Filters */}
+        {(searchQuery || selectedDepartments.size !== allDepartments.length) && (
+          <button
+            onClick={() => {
+              setSearchQuery('');
+              setSelectedDepartments(new Set(allDepartments));
+            }}
+            className="w-full py-2 text-sm text-accent-primary hover:text-accent-hover border border-accent-primary rounded-lg transition-colors"
+          >
+            Clear Filters
+          </button>
+        )}
+      </aside>
     </div>
   );
 }

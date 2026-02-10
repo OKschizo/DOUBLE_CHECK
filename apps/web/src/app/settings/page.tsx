@@ -3,7 +3,7 @@
 import { ProtectedRoute } from '@/shared/components/layout/ProtectedRoute';
 import { DashboardLayout } from '@/shared/components/layout/DashboardLayout';
 import { useAuth } from '@/features/auth/hooks/useAuth';
-import { trpc } from '@/lib/trpc/client';
+import { useUsers } from '@/features/users/hooks/useUsers';
 import { useState, useEffect } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
@@ -11,14 +11,8 @@ import { uploadImage, generateUniqueFilename, deleteImage, isBlobUrl } from '@/l
 
 export default function SettingsPage() {
   const { user } = useAuth();
-  const { data: profile, isLoading: profileLoading } = trpc.users.getProfile.useQuery();
-  const { data: myProjects = [], isLoading: projectsLoading } = trpc.users.getMyProjects.useQuery();
-  const updateProfile = trpc.users.updateProfile.useMutation({
-    onSuccess: () => {
-      setSuccessMessage('Profile updated successfully!');
-      setTimeout(() => setSuccessMessage(''), 3000);
-    },
-  });
+  const { profile, myProjects, isLoading: profileLoading, updateProfile } = useUsers();
+
 
   const [formData, setFormData] = useState({
     displayName: '',
@@ -105,6 +99,10 @@ export default function SettingsPage() {
           imdb: formData.socials.imdb || null,
         },
       });
+      
+      setSuccessMessage('Profile updated successfully!');
+      setTimeout(() => setSuccessMessage(''), 3000);
+
     } catch (error) {
       console.error('Error updating profile:', error);
       alert('Failed to update profile. Please try again.');
@@ -321,21 +319,21 @@ export default function SettingsPage() {
                 <div className="flex justify-end">
                   <button
                     type="submit"
-                    disabled={uploadingPhoto || updateProfile.isPending}
+                    disabled={uploadingPhoto}
                     className="px-6 py-3 bg-accent-primary text-white rounded-lg hover:bg-accent-hover transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
                     style={{ color: 'rgb(var(--colored-button-text))' }}
                   >
-                    {uploadingPhoto || updateProfile.isPending ? 'Saving...' : 'Save Changes'}
+                    {uploadingPhoto ? 'Saving...' : 'Save Changes'}
                   </button>
                 </div>
               </form>
             </div>
 
-            {/* Projects Sidebar */}
+                {/* Projects Sidebar */}
             <div className="lg:col-span-1">
               <div className="card-elevated p-6 sticky top-8">
                 <h2 className="text-xl font-bold mb-4 text-text-primary">My Projects</h2>
-                {projectsLoading ? (
+                {profileLoading ? ( // Using profileLoading as general loading state for now
                   <div className="flex items-center justify-center py-8">
                     <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-accent-primary"></div>
                   </div>

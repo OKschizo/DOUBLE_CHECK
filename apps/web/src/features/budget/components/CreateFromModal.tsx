@@ -1,7 +1,10 @@
 'use client';
 
 import { useState } from 'react';
-import { trpc } from '@/lib/trpc/client';
+import { useCrewByProject } from '@/features/crew/hooks/useCrew';
+import { useCastByProject } from '@/features/cast/hooks/useCast';
+import { useEquipmentByProject } from '@/features/equipment/hooks/useEquipment';
+import { useLocationsByProject } from '@/features/locations/hooks/useLocations';
 
 interface CreateFromModalProps {
   projectId: string;
@@ -23,10 +26,10 @@ export function CreateFromModal({
   const [sourceType, setSourceType] = useState<'crew' | 'equipment' | 'locations' | 'cast'>('crew');
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
-  const { data: crewMembers = [] } = trpc.crew.listByProject.useQuery({ projectId });
-  const { data: equipment = [] } = trpc.equipment.listByProject.useQuery({ projectId });
-  const { data: locations = [] } = trpc.locations.listByProject.useQuery({ projectId });
-  const { data: castMembers = [] } = trpc.cast.listByProject.useQuery({ projectId });
+  const { data: crewMembers = [] } = useCrewByProject(projectId);
+  const { data: castMembers = [] } = useCastByProject(projectId);
+  const { data: equipment = [] } = useEquipmentByProject(projectId);
+  const { data: locations = [] } = useLocationsByProject(projectId);
 
   const handleCreate = () => {
     if (selectedIds.size === 0) return;

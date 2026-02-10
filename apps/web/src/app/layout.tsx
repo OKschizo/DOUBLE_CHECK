@@ -1,7 +1,6 @@
-import type { Metadata } from 'next';
+import type { Metadata, Viewport } from 'next';
 import { Space_Grotesk } from 'next/font/google';
 import '../styles/globals.css';
-import { TRPCProvider } from '@/lib/trpc/Provider';
 import { ThemeProvider } from '@/lib/providers/ThemeProvider';
 
 const spaceGrotesk = Space_Grotesk({ 
@@ -9,9 +8,22 @@ const spaceGrotesk = Space_Grotesk({
   variable: '--font-space-grotesk',
 });
 
+export const viewport: Viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  maximumScale: 1,
+  userScalable: false,
+  themeColor: '#000000',
+};
+
 export const metadata: Metadata = {
   title: 'DoubleCheck - Film Production Management',
   description: 'Modern film production management platform',
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: 'black-translucent',
+    title: 'DoubleCheck',
+  },
 };
 
 export default function RootLayout({
@@ -23,7 +35,7 @@ export default function RootLayout({
     <html lang="en">
       <body className={spaceGrotesk.className}>
         <ThemeProvider>
-          <TRPCProvider>{children}</TRPCProvider>
+          {children}
         </ThemeProvider>
       </body>
     </html>

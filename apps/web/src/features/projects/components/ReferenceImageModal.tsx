@@ -2,10 +2,11 @@
 
 import React from 'react';
 import Image from 'next/image';
-import { trpc } from '@/lib/trpc/client';
 import { isFirebaseStorageUrl } from '@/lib/firebase/storage';
 import type { ReferenceImage } from '@/lib/schemas';
 import { getProjectTerminology } from '@/shared/utils/projectTerminology';
+import { useProject } from '@/features/projects/hooks/useProjects';
+// import { useShotsByReference } from '@/features/shots/hooks/useShots'; // Placeholder for new hook
 
 interface ReferenceImageModalProps {
   reference: ReferenceImage;
@@ -20,11 +21,11 @@ export function ReferenceImageModal({
   onClose,
   onViewShot,
 }: ReferenceImageModalProps) {
-  const { data: project } = trpc.projects.getById.useQuery({ id: projectId });
-  const { data: shots = [], isLoading } = trpc.referenceImages.getShotsByReference.useQuery({
-    referenceId: reference.id,
-    projectId,
-  });
+  const { data: project } = useProject(projectId);
+  // const { data: shots = [], isLoading } = useShotsByReference(reference.id, projectId);
+  const shots: any[] = []; // Mock data
+  const isLoading = false; // Mock loading
+
   const terminology = getProjectTerminology(project?.projectType);
 
   const categoryLabels: Record<string, string> = {
@@ -169,4 +170,3 @@ export function ReferenceImageModal({
     </div>
   );
 }
-

@@ -1,7 +1,8 @@
 'use client';
 
 import { useState } from 'react';
-import { trpc } from '@/lib/trpc/client';
+import { useCastTemplates } from '../hooks/useCastTemplates';
+import { useCastByProject } from '../hooks/useCast';
 
 interface CastTemplatesProps {
   projectId: string;
@@ -9,32 +10,27 @@ interface CastTemplatesProps {
 }
 
 export function CastTemplates({ projectId, onClose }: CastTemplatesProps) {
-  const { data: templates = [], isLoading } = trpc.castTemplates.getAll.useQuery();
-  const utils = trpc.useUtils();
+  const { templates, isLoading, applyTemplate } = useCastTemplates();
   const [selectedTemplate, setSelectedTemplate] = useState<string | null>(null);
   const [skipExisting, setSkipExisting] = useState(true);
   const [overwriteExisting, setOverwriteExisting] = useState(false);
 
-  const applyTemplate = trpc.castTemplates.applyTemplate.useMutation({
-    onSuccess: (result) => {
-      utils.cast.listByProject.invalidate({ projectId });
-      alert(`Template applied successfully! Created ${result.rolesCreated} cast roles.${result.rolesSkipped > 0 ? ` Skipped ${result.rolesSkipped} existing roles.` : ''}`);
-      onClose();
-    },
-    onError: (error) => {
-      alert(`Failed to apply template: ${error.message}`);
-    },
-  });
-
   const handleApply = async () => {
     if (!selectedTemplate) return;
 
-    await applyTemplate.mutateAsync({
-      projectId,
-      templateId: selectedTemplate,
-      skipExisting,
-      overwriteExisting,
-    });
+    try {
+        const result = await applyTemplate.mutateAsync({
+          projectId,
+          templateId: selectedTemplate,
+          skipExisting,
+          overwriteExisting,
+        });
+        
+        alert(`Template applied successfully! Created ${result.rolesCreated} cast roles.${result.rolesSkipped > 0 ? ` Skipped ${result.rolesSkipped} existing roles.` : ''}`);
+        onClose();
+    } catch (error: any) {
+        alert(`Failed to apply template: ${error.message}`);
+    }
   };
 
   const selectedTemplateData = templates.find(t => t.id === selectedTemplate);
@@ -151,11 +147,11 @@ export function CastTemplates({ projectId, onClose }: CastTemplatesProps) {
           </button>
           <button
             onClick={handleApply}
-            disabled={!selectedTemplate || applyTemplate.isPending}
+            disabled={!selectedTemplate || (applyTemplate as any).isPending}
             className="px-4 py-2 bg-accent-primary rounded-lg hover:bg-accent-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             style={{ color: 'rgb(var(--colored-button-text))' }}
           >
-            {applyTemplate.isPending ? 'Applying...' : 'Apply Template'}
+            {(applyTemplate as any).isPending ? 'Applying...' : 'Apply Template'}
           </button>
         </div>
       </div>

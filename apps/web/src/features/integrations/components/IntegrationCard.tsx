@@ -1,9 +1,9 @@
 'use client';
 
-import { trpc } from '@/lib/trpc/client';
 import { integrationMetadata, type Integration } from '@/lib/schemas';
 import { useState } from 'react';
 import { IntegrationSettingsModal } from './IntegrationSettingsModal';
+import { useIntegrations } from '../hooks/useIntegrations';
 
 interface IntegrationCardProps {
   integration: Integration;
@@ -13,32 +13,22 @@ interface IntegrationCardProps {
 export function IntegrationCard({ integration, projectId }: IntegrationCardProps) {
   const [isSyncing, setIsSyncing] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
-  const utils = trpc.useUtils();
+  const { deleteIntegration, syncIntegration } = useIntegrations(projectId);
 
   const metadata = integrationMetadata[integration.type];
-  const deleteIntegration = trpc.integrations.delete.useMutation({
-    onSuccess: () => {
-      utils.integrations.listByProject.invalidate({ projectId });
-    },
-  });
-
-  const syncIntegration = trpc.integrations.sync.useMutation({
-    onSuccess: (result) => {
-      utils.integrations.listByProject.invalidate({ projectId });
-      setIsSyncing(false);
-      if (result.message) {
-        alert(result.message);
-      }
-    },
-    onError: (error) => {
-      setIsSyncing(false);
-      alert(`Sync failed: ${error.message}`);
-    },
-  });
 
   const handleSync = async () => {
     setIsSyncing(true);
-    await syncIntegration.mutateAsync({ integrationId: integration.id });
+    try {
+        const result = await syncIntegration.mutateAsync({ integrationId: integration.id });
+        if (result.message) {
+            alert(result.message);
+        }
+    } catch (error: any) {
+        alert(`Sync failed: ${error.message}`);
+    } finally {
+        setIsSyncing(false);
+    }
   };
 
   const handleDisconnect = async () => {

@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useRef } from 'react';
-import { trpc } from '@/lib/trpc/client';
+import { useExpenses } from '@/features/budget/hooks/useExpenses';
 import type { Expense, CreateExpenseInput, UpdateExpenseInput } from '@/lib/schemas';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { storage } from '@/lib/firebase/config';
@@ -15,27 +15,10 @@ interface ExpenseModalProps {
 }
 
 export function ExpenseModal({ projectId, expense, budgetItemId, onClose, onSuccess }: ExpenseModalProps) {
-  const utils = trpc.useUtils();
+  const { createExpense, updateExpense } = useExpenses(projectId);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isUploading, setIsUploading] = useState(false);
-
-  const createExpense = trpc.expenses.create.useMutation({
-    onSuccess: () => {
-      utils.expenses.listByProject.invalidate({ projectId });
-      utils.budget.getBudget.invalidate({ projectId });
-      onSuccess?.();
-      onClose();
-    },
-  });
-
-  const updateExpense = trpc.expenses.update.useMutation({
-    onSuccess: () => {
-      utils.expenses.listByProject.invalidate({ projectId });
-      utils.budget.getBudget.invalidate({ projectId });
-      onSuccess?.();
-      onClose();
-    },
-  });
+  const [isSaving, setIsSaving] = useState(false);
 
   const [formData, setFormData] = useState<Partial<CreateExpenseInput>>({
     projectId,
@@ -75,14 +58,24 @@ export function ExpenseModal({ projectId, expense, budgetItemId, onClose, onSucc
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setIsSaving(true);
     
-    if (expense) {
-      await updateExpense.mutateAsync({
-        id: expense.id,
-        data: formData as UpdateExpenseInput,
-      });
-    } else {
-      await createExpense.mutateAsync(formData as CreateExpenseInput);
+    try {
+        if (expense) {
+          await updateExpense.mutateAsync({
+            id: expense.id,
+            data: formData as UpdateExpenseInput,
+          });
+        } else {
+          await createExpense.mutateAsync(formData as CreateExpenseInput);
+        }
+        onSuccess?.();
+        onClose();
+    } catch (e) {
+        console.error(e);
+        alert("Failed to save expense");
+    } finally {
+        setIsSaving(false);
     }
   };
 
@@ -240,11 +233,11 @@ export function ExpenseModal({ projectId, expense, budgetItemId, onClose, onSucc
             </button>
             <button
               type="submit"
-              disabled={createExpense.isPending || updateExpense.isPending || isUploading}
+              disabled={isSaving || isUploading}
               className="px-4 py-2 bg-accent-primary rounded hover:bg-accent-hover transition-colors font-medium"
               style={{ color: 'rgb(var(--colored-button-text))' }}
             >
-              {createExpense.isPending || updateExpense.isPending ? 'Saving...' : expense ? 'Update' : 'Create'}
+              {isSaving ? 'Saving...' : expense ? 'Update' : 'Create'}
             </button>
           </div>
         </form>

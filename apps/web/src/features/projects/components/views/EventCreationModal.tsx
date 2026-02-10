@@ -1,8 +1,16 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import { trpc } from '@/lib/trpc/client';
+// import { trpc } from '@/lib/trpc/client';
 import type { ScheduleEventType } from '@/lib/schemas';
+import { useCrewByProject } from '@/features/crew/hooks/useCrew';
+import { useCastByProject } from '@/features/cast/hooks/useCast';
+import { useEquipmentByProject } from '@/features/equipment/hooks/useEquipment';
+import { useLocationsByProject } from '@/features/locations/hooks/useLocations';
+import { useScenesByProject } from '@/features/scenes/hooks/useScenes';
+import { useSchedule } from '@/features/projects/hooks/useSchedule';
+import { useReferenceImages } from '@/features/projects/hooks/useReferenceImages';
+import { useShotsByScene } from '@/features/scenes/hooks/useShots';
 
 interface EventCreationModalProps {
   projectId: string;
@@ -36,21 +44,20 @@ export function EventCreationModal({
   initialData,
 }: EventCreationModalProps) {
   // Fetch data for dropdowns
-  const { data: crewMembers = [] } = trpc.crew.listByProject.useQuery({ projectId });
-  const { data: castMembers = [] } = trpc.cast.listByProject.useQuery({ projectId });
-  const { data: equipment = [] } = trpc.equipment.listByProject.useQuery({ projectId });
-  const { data: equipmentPackages = [] } = trpc.equipment.listPackages.useQuery({ projectId });
-  const { data: locations = [] } = trpc.locations.listByProject.useQuery({ projectId });
-  const { data: scenes = [], isLoading: isLoadingScenes } = trpc.scenes.listByProject.useQuery({ projectId });
-  const { data: schedule } = trpc.schedule.getSchedule.useQuery({ projectId });
-  const { data: referenceImages = [] } = trpc.referenceImages.list.useQuery({ projectId });
+  const { data: crewMembers = [] } = useCrewByProject(projectId);
+  const { data: castMembers = [] } = useCastByProject(projectId);
+  const { data: equipment = [] } = useEquipmentByProject(projectId);
+  const { data: locations = [] } = useLocationsByProject(projectId);
+  const { data: scenes = [], isLoading: isLoadingScenes } = useScenesByProject(projectId);
+  const { schedule } = useSchedule(projectId);
+  const { images: referenceImages = [] } = useReferenceImages(projectId);
   
   // Get shots for selected scene
   const [selectedSceneId, setSelectedSceneId] = useState<string>('');
-  const { data: shots = [] } = trpc.scenes.getShotsByScene.useQuery(
-    { sceneId: selectedSceneId },
-    { enabled: !!selectedSceneId }
-  );
+  const { data: shots = [] } = useShotsByScene(selectedSceneId);
+
+  // Placeholder
+  const equipmentPackages: any[] = [];
 
   // Form state
   const [formData, setFormData] = useState({
@@ -465,174 +472,42 @@ export function EventCreationModal({
                   <label className="block text-sm font-medium text-text-secondary mb-2">
                     Time
                   </label>
-                  <div className="relative">
-                    <input
-                      type="time"
-                      value={formData.time}
-                      onChange={(e) => setFormData({ ...formData, time: e.target.value })}
-                      className="w-full px-4 py-2 bg-background-primary border border-border-default rounded-lg text-text-primary focus:outline-none focus:ring-2 focus:ring-accent-primary [&::-webkit-calendar-picker-indicator]:invert [&::-webkit-calendar-picker-indicator]:cursor-pointer [&::-webkit-calendar-picker-indicator]:opacity-100"
-                    />
-                  </div>
+                  <input
+                    type="time"
+                    value={formData.time}
+                    onChange={(e) => setFormData({ ...formData, time: e.target.value })}
+                    className="w-full px-4 py-2 bg-background-primary border border-border-default rounded-lg text-text-primary focus:outline-none focus:ring-2 focus:ring-accent-primary"
+                  />
                 </div>
-              </div>
 
-              {/* Scene and Shot Selection */}
-              <div className="grid grid-cols-2 gap-4">
-                <div className="relative">
+                <div>
                   <label className="block text-sm font-medium text-text-secondary mb-2">
-                    Select Scene (Optional)
+                    Duration (minutes)
                   </label>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setShowSceneDropdown(!showSceneDropdown);
-                      setShowShotDropdown(false);
-                    }}
-                    className="w-full px-4 py-2 bg-background-primary border border-border-default rounded-lg text-text-primary focus:outline-none focus:ring-2 focus:ring-accent-primary text-left flex items-center justify-between"
-                  >
-                    <span>
-                      {selectedSceneId 
-                        ? `Scene ${scenes.find(s => s.id === selectedSceneId)?.sceneNumber}${scenes.find(s => s.id === selectedSceneId)?.title ? ` - ${scenes.find(s => s.id === selectedSceneId)?.title}` : ''}`
-                        : 'None - Create manually'}
-                    </span>
-                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                    </svg>
-                  </button>
-                  {showSceneDropdown && (
-                    <div 
-                      className="absolute z-50 mt-2 w-full bg-background-primary border border-border-default rounded-lg shadow-xl max-h-60 overflow-hidden flex flex-col"
-                      onClick={(e) => e.stopPropagation()}
-                      onMouseDown={(e) => e.stopPropagation()}
-                    >
-                      <input
-                        type="text"
-                        placeholder="Search scenes..."
-                        value={sceneSearch}
-                        onChange={(e) => setSceneSearch(e.target.value)}
-                        onClick={(e) => e.stopPropagation()}
-                        onFocus={(e) => e.stopPropagation()}
-                        onMouseDown={(e) => e.stopPropagation()}
-                        className="px-3 py-2 border-b border-border-default bg-background-secondary text-text-primary text-sm focus:outline-none focus:border-accent-primary"
-                      />
-                      <div className="overflow-y-auto max-h-48">
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleSceneChange('');
-                          }}
-                          onMouseDown={(e) => e.stopPropagation()}
-                          className="w-full text-left px-4 py-2 hover:bg-background-tertiary text-sm text-text-primary transition-colors"
-                        >
-                          None - Create manually
-                        </button>
-                        {isLoadingScenes ? (
-                          <div className="px-4 py-2 text-sm text-text-tertiary flex items-center gap-2">
-                            <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
-                            Loading scenes...
-                          </div>
-                        ) : scenes.length === 0 ? (
-                          <div className="px-4 py-2 text-sm text-text-tertiary">No scenes available</div>
-                        ) : filteredScenes.length > 0 ? (
-                          filteredScenes.map((scene) => (
-                            <button
-                              key={scene.id}
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleSceneChange(scene.id);
-                              }}
-                              onMouseDown={(e) => e.stopPropagation()}
-                              className="w-full text-left px-4 py-2 hover:bg-background-tertiary text-sm text-text-primary transition-colors"
-                            >
-                              Scene {scene.sceneNumber} {scene.title ? `- ${scene.title}` : ''}
-                            </button>
-                          ))
-                        ) : (
-                          <div className="px-4 py-2 text-sm text-text-tertiary">No results found</div>
-                        )}
-                      </div>
-                    </div>
-                  )}
+                  <input
+                    type="number"
+                    min="1"
+                    value={formData.duration}
+                    onChange={(e) => setFormData({ ...formData, duration: e.target.value })}
+                    placeholder="30"
+                    className="w-full px-4 py-2 bg-background-primary border border-border-default rounded-lg text-text-primary focus:outline-none focus:ring-2 focus:ring-accent-primary"
+                  />
                 </div>
 
-                {selectedSceneId && (
-                  <div className="relative">
-                    <label className="block text-sm font-medium text-text-secondary mb-2">
-                      Select Shot (Optional)
-                    </label>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setShowShotDropdown(!showShotDropdown);
-                        setShowSceneDropdown(false);
-                      }}
-                      className="w-full px-4 py-2 bg-background-primary border border-border-default rounded-lg text-text-primary focus:outline-none focus:ring-2 focus:ring-accent-primary text-left flex items-center justify-between"
-                    >
-                      <span>
-                        {formData.shotId 
-                          ? `Shot ${shots.find(s => s.id === formData.shotId)?.shotNumber}${shots.find(s => s.id === formData.shotId)?.title ? ` - ${shots.find(s => s.id === formData.shotId)?.title}` : ''}`
-                          : 'None - Use scene data'}
-                      </span>
-                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                      </svg>
-                    </button>
-                    {showShotDropdown && (
-                      <div className="absolute z-10 mt-2 w-full bg-background-primary border border-border-default rounded-lg shadow-xl max-h-60 overflow-hidden flex flex-col">
-                        <input
-                          type="text"
-                          placeholder="Search shots..."
-                          value={shotSearch}
-                          onChange={(e) => setShotSearch(e.target.value)}
-                          onClick={(e) => e.stopPropagation()}
-                          className="px-3 py-2 border-b border-border-default bg-background-secondary text-text-primary text-sm focus:outline-none focus:border-accent-primary"
-                        />
-                        <div className="overflow-y-auto max-h-48">
-                          <button
-                            type="button"
-                            onClick={() => handleShotChange('')}
-                            className="w-full text-left px-4 py-2 hover:bg-background-tertiary text-sm text-text-primary transition-colors"
-                          >
-                            None - Use scene data
-                          </button>
-                          {filteredShots.length > 0 ? (
-                            filteredShots.map((shot) => (
-                              <button
-                                key={shot.id}
-                                type="button"
-                                onClick={() => handleShotChange(shot.id)}
-                                className="w-full text-left px-4 py-2 hover:bg-background-tertiary text-sm text-text-primary transition-colors"
-                              >
-                                Shot {shot.shotNumber} {shot.title ? `- ${shot.title}` : ''}
-                              </button>
-                            ))
-                          ) : (
-                            <div className="px-4 py-2 text-sm text-text-tertiary">No results found</div>
-                          )}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
+                <div className="col-span-2">
+                  <label className="block text-sm font-medium text-text-secondary mb-2">
+                    Description *
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.description}
+                    onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                    placeholder="Event description"
+                    required
+                    className="w-full px-4 py-2 bg-background-primary border border-border-default rounded-lg text-text-primary focus:outline-none focus:ring-2 focus:ring-accent-primary"
+                  />
+                </div>
 
-              <div>
-                <label className="block text-sm font-medium text-text-secondary mb-2">
-                  Description *
-                </label>
-                <input
-                  type="text"
-                  value={formData.description}
-                  onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                  placeholder="Event description"
-                  className="w-full px-4 py-2 bg-background-primary border border-border-default rounded-lg text-text-primary focus:outline-none focus:ring-2 focus:ring-accent-primary"
-                  required
-                />
-              </div>
-
-              <div className="grid grid-cols-3 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-text-secondary mb-2">
                     Scene Number
@@ -641,7 +516,7 @@ export function EventCreationModal({
                     type="text"
                     value={formData.sceneNumber}
                     onChange={(e) => setFormData({ ...formData, sceneNumber: e.target.value })}
-                    placeholder="e.g., 1, 2A, 3B"
+                    placeholder="1A"
                     className="w-full px-4 py-2 bg-background-primary border border-border-default rounded-lg text-text-primary focus:outline-none focus:ring-2 focus:ring-accent-primary"
                   />
                 </div>
@@ -654,562 +529,46 @@ export function EventCreationModal({
                     type="text"
                     value={formData.pageCount}
                     onChange={(e) => setFormData({ ...formData, pageCount: e.target.value })}
-                    placeholder="e.g., 1/8, 3 4/8"
+                    placeholder="2/8"
                     className="w-full px-4 py-2 bg-background-primary border border-border-default rounded-lg text-text-primary focus:outline-none focus:ring-2 focus:ring-accent-primary"
                   />
                 </div>
 
-                <div>
-                  <label className="block text-sm font-medium text-text-secondary mb-2">
-                    Duration (minutes)
-                  </label>
-                  <input
-                    type="number"
-                    value={formData.duration}
-                    onChange={(e) => setFormData({ ...formData, duration: e.target.value })}
-                    placeholder="e.g., 30"
-                    min="0"
-                    className="w-full px-4 py-2 bg-background-primary border border-border-default rounded-lg text-text-primary focus:outline-none focus:ring-2 focus:ring-accent-primary"
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
+                <div className="col-span-2">
                   <label className="block text-sm font-medium text-text-secondary mb-2">
                     Location
                   </label>
                   <select
-                    value={formData.locationId}
+                    value={formData.locationId || ''}
                     onChange={(e) => handleLocationChange(e.target.value)}
                     className="w-full px-4 py-2 bg-background-primary border border-border-default rounded-lg text-text-primary focus:outline-none focus:ring-2 focus:ring-accent-primary"
                   >
-                    <option value="">Select location or enter manually</option>
-                    {locations.map((location) => (
-                      <option key={location.id} value={location.id}>
-                        {location.name} - {location.address}
-                      </option>
+                    <option value="">Select location or type below...</option>
+                    {locations.map((loc) => (
+                      <option key={loc.id} value={loc.id}>{loc.name}</option>
                     ))}
                   </select>
+                  <input
+                    type="text"
+                    value={formData.location}
+                    onChange={(e) => setFormData({ ...formData, location: e.target.value })}
+                    placeholder="Or type custom location"
+                    className="w-full px-4 py-2 mt-2 bg-background-primary border border-border-default rounded-lg text-text-primary focus:outline-none focus:ring-2 focus:ring-accent-primary"
+                  />
                 </div>
 
-                {!formData.locationId && (
-                  <div>
-                    <label className="block text-sm font-medium text-text-secondary mb-2">
-                      Location (Manual Entry)
-                    </label>
-                    <input
-                      type="text"
-                      value={formData.location}
-                      onChange={(e) => setFormData({ ...formData, location: e.target.value })}
-                      placeholder="Enter location name"
-                      className="w-full px-4 py-2 bg-background-primary border border-border-default rounded-lg text-text-primary focus:outline-none focus:ring-2 focus:ring-accent-primary"
-                    />
-                  </div>
-                )}
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-text-secondary mb-2">
-                  Notes
-                </label>
-                <textarea
-                  value={formData.notes}
-                  onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-                  placeholder="Additional notes or instructions"
-                  rows={3}
-                  className="w-full px-4 py-2 bg-background-primary border border-border-default rounded-lg text-text-primary focus:outline-none focus:ring-2 focus:ring-accent-primary resize-none"
-                />
-              </div>
-            </div>
-
-            {/* Cast */}
-            <div className="space-y-4">
-              <h3 className="text-lg font-semibold text-text-primary border-b border-border-default pb-2">
-                Cast
-              </h3>
-              {selectedCastIds.size > 0 && (
-                <div className="flex flex-wrap gap-2 mb-2">
-                  {Array.from(selectedCastIds).map((id) => {
-                    const member = castMembers.find(c => c.id === id);
-                    if (!member) return null;
-                    return (
-                      <div
-                        key={id}
-                        className="flex items-center gap-2 px-3 py-1.5 bg-background-tertiary rounded-lg border border-border-default"
-                      >
-                        <span className="text-sm text-text-primary">
-                          {member.actorName} as {member.characterName}
-                        </span>
-                        <button
-                          type="button"
-                          onClick={() => toggleCast(id)}
-                          className="text-text-tertiary hover:text-error transition-colors"
-                        >
-                          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                          </svg>
-                        </button>
-                      </div>
-                    );
-                  })}
+                <div className="col-span-2">
+                  <label className="block text-sm font-medium text-text-secondary mb-2">
+                    Notes
+                  </label>
+                  <textarea
+                    value={formData.notes}
+                    onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+                    rows={2}
+                    placeholder="Additional notes..."
+                    className="w-full px-4 py-2 bg-background-primary border border-border-default rounded-lg text-text-primary focus:outline-none focus:ring-2 focus:ring-accent-primary resize-none"
+                  />
                 </div>
-              )}
-              <div className="relative">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowCastDropdown(!showCastDropdown);
-                    setShowCrewDropdown(false);
-                    setShowEquipmentDropdown(false);
-                  }}
-                  className="btn-secondary flex items-center gap-2 w-full"
-                >
-                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                  </svg>
-                  Add Cast
-                </button>
-                {showCastDropdown && (
-                  <div className="absolute z-10 mt-2 w-full bg-background-primary border border-border-default rounded-lg shadow-xl max-h-60 overflow-hidden flex flex-col">
-                    <input
-                      type="text"
-                      placeholder="Search cast..."
-                      value={castSearch}
-                      onChange={(e) => setCastSearch(e.target.value)}
-                      onClick={(e) => e.stopPropagation()}
-                      className="px-3 py-2 border-b border-border-default bg-background-secondary text-text-primary text-sm focus:outline-none focus:border-accent-primary"
-                    />
-                    <div className="overflow-y-auto max-h-48">
-                      {filteredCast.length > 0 ? (
-                        filteredCast.map((member) => (
-                          <button
-                            key={member.id}
-                            type="button"
-                            onClick={() => {
-                              toggleCast(member.id);
-                              setCastSearch('');
-                            }}
-                            className={`w-full text-left px-4 py-2 hover:bg-background-tertiary text-sm transition-colors ${
-                              selectedCastIds.has(member.id) ? 'bg-background-tertiary' : ''
-                            }`}
-                          >
-                            <div className="font-medium text-text-primary">
-                              {member.actorName} as {member.characterName}
-                            </div>
-                            <div className="text-xs text-text-tertiary">{member.castType}</div>
-                          </button>
-                        ))
-                      ) : (
-                        <div className="px-4 py-2 text-sm text-text-tertiary">No results found</div>
-                      )}
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* Crew */}
-            <div className="space-y-4">
-              <h3 className="text-lg font-semibold text-text-primary border-b border-border-default pb-2">
-                Crew Required
-              </h3>
-              {selectedCrewIds.size > 0 && (
-                <div className="flex flex-wrap gap-2 mb-2">
-                  {Array.from(selectedCrewIds).map((id) => {
-                    const member = crewMembers.find(c => c.id === id);
-                    if (!member) return null;
-                    return (
-                      <div
-                        key={id}
-                        className="flex items-center gap-2 px-3 py-1.5 bg-background-tertiary rounded-lg border border-border-default"
-                      >
-                        <span className="text-sm text-text-primary">
-                          {member.name} - {member.role}
-                        </span>
-                        <button
-                          type="button"
-                          onClick={() => toggleCrew(id)}
-                          className="text-text-tertiary hover:text-error transition-colors"
-                        >
-                          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                          </svg>
-                        </button>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-              <div className="relative">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowCrewDropdown(!showCrewDropdown);
-                    setShowCastDropdown(false);
-                    setShowEquipmentDropdown(false);
-                  }}
-                  className="btn-secondary flex items-center gap-2 w-full"
-                >
-                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                  </svg>
-                  Add Crew
-                </button>
-                {showCrewDropdown && (
-                  <div className="absolute z-10 mt-2 w-full bg-background-primary border border-border-default rounded-lg shadow-xl max-h-96 overflow-hidden flex flex-col">
-                    <input
-                      type="text"
-                      placeholder="Search crew or departments..."
-                      value={crewSearch}
-                      onChange={(e) => setCrewSearch(e.target.value)}
-                      onClick={(e) => e.stopPropagation()}
-                      className="px-3 py-2 border-b border-border-default bg-background-secondary text-text-primary text-sm focus:outline-none focus:border-accent-primary"
-                    />
-                    <div className="overflow-y-auto max-h-80">
-                      {/* Department Quick Add */}
-                      {Object.entries(crewByDepartment).map(([department, members]) => {
-                        const deptSelected = members.length > 0 && members.every(m => selectedCrewIds.has(m.id));
-                        const deptPartiallySelected = members.some(m => selectedCrewIds.has(m.id));
-                        const matchesSearch = !crewSearch || department.toLowerCase().includes(crewSearch.toLowerCase()) || 
-                          members.some(m => m.name.toLowerCase().includes(crewSearch.toLowerCase()) || m.role.toLowerCase().includes(crewSearch.toLowerCase()));
-                        
-                        if (!matchesSearch) return null;
-                        
-                        const visibleMembers = members.filter(m => !crewSearch || filteredCrew.includes(m));
-                        
-                        return (
-                          <div key={department} className="border-b border-border-subtle">
-                            <button
-                              type="button"
-                              onClick={() => {
-                                if (deptSelected) {
-                                  // Remove all from department
-                                  const newSet = new Set(selectedCrewIds);
-                                  members.forEach(m => newSet.delete(m.id));
-                                  setSelectedCrewIds(newSet);
-                                } else {
-                                  // Add all from department
-                                  addCrewDepartment(department);
-                                }
-                              }}
-                              className={`w-full text-left px-4 py-2 hover:bg-background-tertiary text-sm font-semibold transition-colors flex items-center justify-between ${
-                                deptSelected ? 'bg-accent-primary/10 text-accent-primary' : ''
-                              }`}
-                            >
-                              <span className="capitalize">{department.replace(/_/g, ' ')} ({members.length})</span>
-                              {deptSelected && (
-                                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                                </svg>
-                              )}
-                            </button>
-                            {visibleMembers.length > 0 && (
-                              <div className="pl-4">
-                                {visibleMembers.map((member) => (
-                                  <button
-                                    key={member.id}
-                                    type="button"
-                                    onClick={() => {
-                                      toggleCrew(member.id);
-                                    }}
-                                    className={`w-full text-left px-4 py-2 hover:bg-background-tertiary text-sm transition-colors ${
-                                      selectedCrewIds.has(member.id) ? 'bg-background-tertiary' : ''
-                                    }`}
-                                  >
-                                    <div className="font-medium text-text-primary">{member.name}</div>
-                                    <div className="text-xs text-text-tertiary">{member.role}</div>
-                                  </button>
-                                ))}
-                              </div>
-                            )}
-                          </div>
-                        );
-                      })}
-                      {filteredCrew.length === 0 && Object.keys(crewByDepartment).length === 0 && (
-                        <div className="px-4 py-2 text-sm text-text-tertiary">No results found</div>
-                      )}
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* Equipment */}
-            <div className="space-y-4">
-              <h3 className="text-lg font-semibold text-text-primary border-b border-border-default pb-2">
-                Equipment Needed
-              </h3>
-              {selectedEquipmentIds.size > 0 && (
-                <div className="flex flex-wrap gap-2 mb-2">
-                  {Array.from(selectedEquipmentIds).map((id) => {
-                    const item = equipment.find(e => e.id === id);
-                    if (!item) return null;
-                    return (
-                      <div
-                        key={id}
-                        className="flex items-center gap-2 px-3 py-1.5 bg-background-tertiary rounded-lg border border-border-default"
-                      >
-                        <span className="text-sm text-text-primary">
-                          {item.name} {item.quantity > 1 && `(x${item.quantity})`}
-                        </span>
-                        <button
-                          type="button"
-                          onClick={() => toggleEquipment(id)}
-                          className="text-text-tertiary hover:text-error transition-colors"
-                        >
-                          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                          </svg>
-                        </button>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-              <div className="relative">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowEquipmentDropdown(!showEquipmentDropdown);
-                    setShowCastDropdown(false);
-                    setShowCrewDropdown(false);
-                  }}
-                  className="btn-secondary flex items-center gap-2 w-full"
-                >
-                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                  </svg>
-                  Add Equipment
-                </button>
-                {showEquipmentDropdown && (
-                  <div className="absolute z-10 mt-2 w-full bg-background-primary border border-border-default rounded-lg shadow-xl max-h-96 overflow-hidden flex flex-col">
-                    <input
-                      type="text"
-                      placeholder="Search equipment, packages, or categories..."
-                      value={equipmentSearch}
-                      onChange={(e) => setEquipmentSearch(e.target.value)}
-                      onClick={(e) => e.stopPropagation()}
-                      className="px-3 py-2 border-b border-border-default bg-background-secondary text-text-primary text-sm focus:outline-none focus:border-accent-primary"
-                    />
-                    <div className="overflow-y-auto max-h-80">
-                      {/* Equipment Packages */}
-                      {filteredEquipmentPackages.length > 0 && (
-                        <div className="border-b border-border-subtle">
-                          <div className="px-4 py-2 text-xs font-semibold text-text-secondary uppercase tracking-wider bg-background-tertiary">
-                            Packages
-                          </div>
-                          {filteredEquipmentPackages.map((pkg) => (
-                            <button
-                              key={pkg.id}
-                              type="button"
-                              onClick={() => addEquipmentPackage(pkg.id)}
-                              className="w-full text-left px-4 py-2 hover:bg-background-tertiary text-sm transition-colors"
-                            >
-                              <div className="font-medium text-text-primary">{pkg.name}</div>
-                              {pkg.description && (
-                                <div className="text-xs text-text-tertiary">{pkg.description}</div>
-                              )}
-                              <div className="text-xs text-text-tertiary">
-                                {pkg.equipmentIds.length} item{pkg.equipmentIds.length !== 1 ? 's' : ''}
-                              </div>
-                            </button>
-                          ))}
-                        </div>
-                      )}
-                      
-                      {/* Equipment by Category */}
-                      {Object.entries(equipmentByCategory).map(([category, items]) => {
-                        const catItems = items.filter(item => 
-                          !equipmentSearch || filteredEquipment.includes(item)
-                        );
-                        if (catItems.length === 0) return null;
-                        
-                        const catSelected = catItems.every(i => selectedEquipmentIds.has(i.id));
-                        const catPartiallySelected = catItems.some(i => selectedEquipmentIds.has(i.id));
-                        
-                        return (
-                          <div key={category} className="border-b border-border-subtle">
-                            <button
-                              type="button"
-                              onClick={() => {
-                                const newSet = new Set(selectedEquipmentIds);
-                                if (catSelected) {
-                                  // Remove all from category
-                                  catItems.forEach(item => newSet.delete(item.id));
-                                } else {
-                                  // Add all from category
-                                  catItems.forEach(item => newSet.add(item.id));
-                                }
-                                setSelectedEquipmentIds(newSet);
-                                setEquipmentSearch('');
-                              }}
-                              className={`w-full text-left px-4 py-2 hover:bg-background-tertiary text-sm font-semibold transition-colors flex items-center justify-between ${
-                                catSelected ? 'bg-accent-primary/10 text-accent-primary' : ''
-                              }`}
-                            >
-                              <span className="capitalize">{category.replace(/_/g, ' ')} ({catItems.length})</span>
-                              {catSelected && (
-                                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                                </svg>
-                              )}
-                            </button>
-                            <div className="pl-4">
-                              {catItems.map((item) => (
-                                <button
-                                  key={item.id}
-                                  type="button"
-                                  onClick={() => {
-                                    toggleEquipment(item.id);
-                                    setEquipmentSearch('');
-                                  }}
-                                  className={`w-full text-left px-4 py-2 hover:bg-background-tertiary text-sm transition-colors ${
-                                    selectedEquipmentIds.has(item.id) ? 'bg-background-tertiary' : ''
-                                  }`}
-                                >
-                                  <div className="font-medium text-text-primary">
-                                    {item.name} {item.quantity > 1 && `(x${item.quantity})`}
-                                  </div>
-                                  {item.manufacturer && item.model && (
-                                    <div className="text-xs text-text-tertiary">
-                                      {item.manufacturer} {item.model}
-                                    </div>
-                                  )}
-                                </button>
-                              ))}
-                            </div>
-                          </div>
-                        );
-                      })}
-                      {filteredEquipment.length === 0 && filteredEquipmentPackages.length === 0 && (
-                        <div className="px-4 py-2 text-sm text-text-tertiary">No results found</div>
-                      )}
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* Storyboards */}
-            <div className="space-y-4">
-              <h3 className="text-lg font-semibold text-text-primary border-b border-border-default pb-2">
-                Storyboard References
-              </h3>
-              {selectedStoryboardIds.size > 0 && (
-                <div className="flex flex-wrap gap-2 mb-2">
-                  {Array.from(selectedStoryboardIds).map((id) => {
-                    const ref = referenceImages.find(r => r.id === id);
-                    if (!ref) return null;
-                    return (
-                      <div
-                        key={id}
-                        className="flex items-center gap-2 px-3 py-1.5 bg-background-tertiary rounded-lg border border-border-default"
-                      >
-                        <img 
-                          src={ref.url} 
-                          alt={ref.name}
-                          className="w-8 h-8 object-cover rounded"
-                        />
-                        <span className="text-sm text-text-primary">{ref.name}</span>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            const newSet = new Set(selectedStoryboardIds);
-                            newSet.delete(id);
-                            setSelectedStoryboardIds(newSet);
-                          }}
-                          className="text-text-tertiary hover:text-error transition-colors"
-                        >
-                          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                          </svg>
-                        </button>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-              <div className="text-sm text-text-secondary">
-                {formData.shotId 
-                  ? `References from selected shot are automatically included. You can add more below.`
-                  : `Select a shot to automatically include its storyboard references, or add references manually.`}
-              </div>
-              <div className="relative">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowStoryboardDropdown(!showStoryboardDropdown);
-                    setShowEquipmentDropdown(false);
-                    setShowCastDropdown(false);
-                    setShowCrewDropdown(false);
-                  }}
-                  className="btn-secondary flex items-center gap-2 w-full"
-                  disabled={referenceImages.length === 0}
-                >
-                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                  </svg>
-                  Add Storyboard Reference
-                </button>
-                {showStoryboardDropdown && referenceImages.length > 0 && (
-                  <div className="absolute z-10 mt-2 w-full bg-background-primary border border-border-default rounded-lg shadow-xl max-h-60 overflow-hidden flex flex-col">
-                    <input
-                      type="text"
-                      placeholder="Search references..."
-                      value={storyboardSearch}
-                      onChange={(e) => setStoryboardSearch(e.target.value)}
-                      onClick={(e) => e.stopPropagation()}
-                      onFocus={(e) => e.stopPropagation()}
-                      className="px-3 py-2 border-b border-border-default bg-background-secondary text-text-primary text-sm focus:outline-none focus:border-accent-primary"
-                    />
-                    <div className="overflow-y-auto max-h-48">
-                      {filteredStoryboards.length > 0 ? (
-                        filteredStoryboards.map((ref) => (
-                          <button
-                            key={ref.id}
-                            type="button"
-                            onClick={() => {
-                              const newSet = new Set(selectedStoryboardIds);
-                              if (newSet.has(ref.id)) {
-                                newSet.delete(ref.id);
-                              } else {
-                                newSet.add(ref.id);
-                              }
-                              setSelectedStoryboardIds(newSet);
-                              setStoryboardSearch('');
-                            }}
-                            className={`w-full text-left px-4 py-2 hover:bg-background-tertiary text-sm transition-colors flex items-center gap-3 ${
-                              selectedStoryboardIds.has(ref.id) ? 'bg-background-tertiary' : ''
-                            }`}
-                          >
-                            <img 
-                              src={ref.url} 
-                              alt={ref.name}
-                              className="w-10 h-10 object-cover rounded"
-                            />
-                            <div className="flex-1">
-                              <div className="font-medium text-text-primary">{ref.name}</div>
-                              {ref.category && (
-                                <div className="text-xs text-text-tertiary capitalize">{ref.category}</div>
-                              )}
-                            </div>
-                            {selectedStoryboardIds.has(ref.id) && (
-                              <svg className="w-4 h-4 text-accent-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                              </svg>
-                            )}
-                          </button>
-                        ))
-                      ) : (
-                        <div className="px-4 py-2 text-sm text-text-tertiary">No results found</div>
-                      )}
-                    </div>
-                  </div>
-                )}
-                {referenceImages.length === 0 && (
-                  <p className="text-xs text-text-tertiary mt-1">No reference images available. Add them in the Storyboards tab.</p>
-                )}
               </div>
             </div>
           </div>
@@ -1237,4 +596,3 @@ export function EventCreationModal({
     </div>
   );
 }
-

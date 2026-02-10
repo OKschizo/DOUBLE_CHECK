@@ -1,59 +1,123 @@
-import { trpc } from '@/lib/trpc/client';
-import type { CreateExpenseInput, UpdateExpenseInput } from '@/lib/schemas';
+import { 
+  collection, 
+  query, 
+  where, 
+  onSnapshot, 
+  addDoc, 
+  updateDoc, 
+  deleteDoc, 
+  doc, 
+  serverTimestamp 
+} from 'firebase/firestore';
+import { db } from '@/lib/firebase/config';
+import { useAuth } from '@/features/auth/hooks/useAuth';
+import { useEffect, useState } from 'react';
 
 export function useExpenses(projectId: string) {
-  const utils = trpc.useUtils();
+  const [expenses, setExpenses] = useState<any[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<Error | null>(null);
+  const { user } = useAuth();
 
-  const { data: expenses, isLoading, error } = trpc.expenses.listByProject.useQuery({ projectId });
+  useEffect(() => {
+    if (!projectId) {
+      setExpenses([]);
+      setIsLoading(false);
+      return;
+    }
 
-  const createExpense = trpc.expenses.create.useMutation({
-    onSuccess: () => {
-      utils.expenses.listByProject.invalidate({ projectId });
-      utils.budget.getBudget.invalidate({ projectId });
-    },
-  });
+    const q = query(
+      collection(db, 'expenses'),
+      where('projectId', '==', projectId)
+    );
 
-  const updateExpense = trpc.expenses.update.useMutation({
-    onSuccess: () => {
-      utils.expenses.listByProject.invalidate({ projectId });
-      utils.budget.getBudget.invalidate({ projectId });
-    },
-  });
+    const unsubscribe = onSnapshot(q, 
+      (snapshot) => {
+        const expenseList = snapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data(),
+          date: doc.data().date?.toDate() || new Date(doc.data().date),
+          createdAt: doc.data().createdAt?.toDate() || new Date(),
+          updatedAt: doc.data().updatedAt?.toDate() || new Date(),
+        }));
+        
+        setExpenses(expenseList);
+        setIsLoading(false);
+      },
+      (err) => {
+        console.error('Error fetching expenses:', err);
+        setError(err);
+        setIsLoading(false);
+      }
+    );
 
-  const deleteExpense = trpc.expenses.delete.useMutation({
-    onSuccess: () => {
-      utils.expenses.listByProject.invalidate({ projectId });
-      utils.budget.getBudget.invalidate({ projectId });
-    },
-  });
+    return () => unsubscribe();
+  }, [projectId]);
 
-  const importExpenses = trpc.expenses.import.useMutation({
-    onSuccess: () => {
-      utils.expenses.listByProject.invalidate({ projectId });
-      utils.budget.getBudget.invalidate({ projectId });
-    },
-  });
+  const createExpense = async (data: any) => {
+    if (!user) throw new Error("Not logged in");
+    await addDoc(collection(db, 'expenses'), {
+      ...data,
+      projectId,
+      createdBy: user.id,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    });
+  };
+
+  const updateExpense = async ({ id, data }: { id: string, data: any }) => {
+    await updateDoc(doc(db, 'expenses', id), {
+      ...data,
+      updatedAt: serverTimestamp(),
+    });
+  };
+
+  const deleteExpense = async ({ id }: { id: string }) => {
+    await deleteDoc(doc(db, 'expenses', id));
+  };
+
+  const importExpenses = async (data: any) => {
+     // Placeholder for bulk import
+     console.log("Import expenses", data);
+  };
 
   return {
-    expenses: expenses || [],
+    expenses,
     isLoading,
     error,
-    createExpense,
-    updateExpense,
-    deleteExpense,
-    importExpenses,
+    createExpense: { mutate: createExpense, mutateAsync: createExpense },
+    updateExpense: { mutate: updateExpense, mutateAsync: updateExpense },
+    deleteExpense: { mutate: deleteExpense, mutateAsync: deleteExpense },
+    importExpenses: { mutate: importExpenses, mutateAsync: importExpenses },
   };
 }
 
 export function useExpensesByBudgetItem(budgetItemId: string) {
-  const utils = trpc.useUtils();
+  const [expenses, setExpenses] = useState<any[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
 
-  const { data: expenses, isLoading, error } = trpc.expenses.listByBudgetItem.useQuery({ budgetItemId });
+  useEffect(() => {
+    if (!budgetItemId) return;
 
-  return {
-    expenses: expenses || [],
-    isLoading,
-    error,
-  };
+    const q = query(
+      collection(db, 'expenses'),
+      where('budgetItemId', '==', budgetItemId)
+    );
+
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const expenseList = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data(),
+        date: doc.data().date?.toDate() || new Date(),
+        createdAt: doc.data().createdAt?.toDate() || new Date(),
+        updatedAt: doc.data().updatedAt?.toDate() || new Date(),
+      }));
+      setExpenses(expenseList);
+      setIsLoading(false);
+    });
+
+    return () => unsubscribe();
+  }, [budgetItemId]);
+
+  return { expenses, isLoading };
 }
-

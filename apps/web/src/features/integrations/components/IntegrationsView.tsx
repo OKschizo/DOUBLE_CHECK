@@ -1,10 +1,10 @@
 'use client';
 
 import { useState } from 'react';
-import { trpc } from '@/lib/trpc/client';
 import { integrationMetadata, type IntegrationType } from '@/lib/schemas';
 import { IntegrationCard } from './IntegrationCard';
 import { IntegrationModal } from './IntegrationModal';
+import { useIntegrations } from '../hooks/useIntegrations';
 
 interface IntegrationsViewProps {
   projectId: string;
@@ -14,11 +14,14 @@ export function IntegrationsView({ projectId }: IntegrationsViewProps) {
   const [selectedIntegration, setSelectedIntegration] = useState<IntegrationType | null>(null);
   const [showModal, setShowModal] = useState(false);
 
-  const { data: integrations = [], isLoading } = trpc.integrations.listByProject.useQuery({
-    projectId,
-  });
+  const { integrations, isLoading } = useIntegrations(projectId);
 
-  const { data: availableTypes = [] } = trpc.integrations.getAvailableTypes.useQuery();
+  // Mock available types for client-side demo
+  const availableTypes: any[] = [
+    { type: 'slack', category: 'communication', name: 'Slack', description: 'Send notifications to Slack channels', icon: '💬' },
+    { type: 'google_drive', category: 'storage', name: 'Google Drive', description: 'Sync files with Google Drive', icon: '📁' },
+    // Add more mocks as needed
+  ];
 
   const handleAddIntegration = (type: IntegrationType) => {
     setSelectedIntegration(type);

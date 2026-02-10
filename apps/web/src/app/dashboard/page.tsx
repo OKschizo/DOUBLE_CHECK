@@ -3,41 +3,57 @@
 import { ProtectedRoute } from '@/shared/components/layout/ProtectedRoute';
 import { DashboardLayout } from '@/shared/components/layout/DashboardLayout';
 import { useAuth } from '@/features/auth/hooks/useAuth';
-import { useProjects } from '@/features/projects/hooks/useProjects';
+import { useProjects, usePendingInvites, useAcceptInvite, useDeclineInvite } from '@/features/projects/hooks/useProjects';
 import { ProjectCard } from '@/features/projects/components/ProjectCard';
 import { CloneDemoButton } from '@/features/projects/components/CloneDemoButton';
-// Removed TRPC import
 import Link from 'next/link';
 import { useMemo, useState } from 'react';
+import { useRouter } from 'next/navigation';
 
 export default function DashboardPage() {
   const { firebaseUser, user } = useAuth();
   const { data: projects, isLoading, error } = useProjects();
+  const { data: pendingInvites } = usePendingInvites();
+  const acceptInvite = useAcceptInvite();
+  const declineInvite = useDeclineInvite();
+  const router = useRouter();
   
-  // Templates and Invites are temporarily disabled until migrated to Client SDK
-  const templates: any[] = [];
-  const pendingInvites: any[] = [];
-  
-  // Placeholder mutations until migrated
-  const acceptInvite = { isPending: false, mutate: () => {} };
-  const createFromTemplate = { isPending: false, mutate: () => {} };
-  const seedTemplate = { isPending: false, isSuccess: false, isError: false, mutate: () => {} };
-  const deleteTemplate = { mutate: () => {} };
+  const [processingInvite, setProcessingInvite] = useState<string | null>(null);
 
-  const [showSeedProgress, setShowSeedProgress] = useState(false);
-  const [showTemplateModal, setShowTemplateModal] = useState(false);
-  const [selectedTemplate, setSelectedTemplate] = useState<any>(null);
-  const [newProjectTitle, setNewProjectTitle] = useState('');
-  const [newProjectStartDate, setNewProjectStartDate] = useState(new Date().toISOString().split('T')[0]);
+  const handleAcceptInvite = async (inviteId: string, projectId: string) => {
+    setProcessingInvite(inviteId);
+    try {
+      await acceptInvite.mutateAsync(inviteId);
+      router.push(`/projects/${projectId}`);
+    } catch (error) {
+      console.error('Error accepting invite:', error);
+      alert('Failed to accept invite');
+    } finally {
+      setProcessingInvite(null);
+    }
+  };
+
+  const handleDeclineInvite = async (inviteId: string) => {
+    setProcessingInvite(inviteId);
+    try {
+      await declineInvite.mutateAsync(inviteId);
+    } catch (error) {
+      console.error('Error declining invite:', error);
+      alert('Failed to decline invite');
+    } finally {
+      setProcessingInvite(null);
+    }
+  };
 
   const stats = useMemo(() => {
-    if (!projects) return { total: 0, production: 0, preProduction: 0, completed: 0 };
+    if (!projects) return { total: 0, production: 0, preProduction: 0, completed: 0, invited: 0 };
 
     return {
       total: projects.length,
       production: projects.filter((p) => p.status === 'production').length,
       preProduction: projects.filter((p) => p.status === 'pre-production').length,
       completed: projects.filter((p) => p.status === 'completed').length,
+      invited: projects.filter((p: any) => p.isInvited).length,
     };
   }, [projects]);
 
@@ -95,9 +111,49 @@ export default function DashboardPage() {
           </div>
 
           {/* Pending Invites */}
-          {pendingInvites.length > 0 && (
+          {pendingInvites && pendingInvites.length > 0 && (
             <div className="card-elevated p-6 bg-gradient-to-r from-blue-500/10 to-purple-500/10 border-2 border-blue-500/30">
-              {/* Invite rendering logic removed for now */}
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-10 h-10 rounded-full bg-blue-500/20 flex items-center justify-center">
+                  <svg className="w-5 h-5 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                  </svg>
+                </div>
+                <div>
+                  <h3 className="font-semibold text-lg">Project Invitations</h3>
+                  <p className="text-text-secondary text-sm">You&apos;ve been invited to collaborate</p>
+                </div>
+              </div>
+              
+              <div className="space-y-3">
+                {pendingInvites.map((invite: any) => (
+                  <div key={invite.id} className="flex items-center justify-between bg-background-secondary/50 rounded-lg p-4">
+                    <div>
+                      <p className="font-medium">{invite.project?.name || 'Untitled Project'}</p>
+                      <p className="text-sm text-text-secondary">
+                        Role: <span className="capitalize text-blue-400">{invite.role}</span>
+                        {invite.invitedByName && ` • Invited by ${invite.invitedByName}`}
+                      </p>
+                    </div>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => handleDeclineInvite(invite.id)}
+                        disabled={processingInvite === invite.id}
+                        className="px-3 py-1.5 text-sm rounded-lg bg-red-500/10 text-red-400 hover:bg-red-500/20 transition-colors disabled:opacity-50"
+                      >
+                        Decline
+                      </button>
+                      <button
+                        onClick={() => handleAcceptInvite(invite.id, invite.projectId)}
+                        disabled={processingInvite === invite.id}
+                        className="px-3 py-1.5 text-sm rounded-lg bg-blue-500 text-white hover:bg-blue-600 transition-colors disabled:opacity-50"
+                      >
+                        {processingInvite === invite.id ? 'Processing...' : 'Accept'}
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
           )}
 
@@ -128,7 +184,14 @@ export default function DashboardPage() {
             <div className="flex justify-between items-center mb-8 flex-wrap gap-4">
               <div>
                 <h2 className="text-2xl font-bold mb-1">Your Projects</h2>
-                <p className="text-text-secondary">Manage and track your film productions</p>
+                <p className="text-text-secondary">
+                  Manage and track your film productions
+                  {stats.invited > 0 && (
+                    <span className="ml-2 text-blue-400">
+                      ({stats.invited} invited)
+                    </span>
+                  )}
+                </p>
               </div>
               
               <div className="flex items-center gap-3">
@@ -143,8 +206,6 @@ export default function DashboardPage() {
               </div>
             </div>
 
-            {/* Templates Section - Hidden until migrated */}
-            
             {isLoading && (
               <div className="flex flex-col items-center justify-center py-16">
                 <div className="relative w-16 h-16 mb-4">
@@ -188,11 +249,15 @@ export default function DashboardPage() {
 
             {projects && projects.length > 0 && (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {projects.map((project) => (
-                  <ProjectCard 
-                    key={project.id} 
-                    project={project as any} 
-                  />
+                {projects.map((project: any) => (
+                  <div key={project.id} className="relative">
+                    {project.isInvited && (
+                      <div className="absolute -top-2 -right-2 z-10 px-2 py-0.5 bg-blue-500 text-white text-xs rounded-full">
+                        Invited
+                      </div>
+                    )}
+                    <ProjectCard project={project} />
+                  </div>
                 ))}
               </div>
             )}

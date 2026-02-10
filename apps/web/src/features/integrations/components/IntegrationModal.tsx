@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { trpc } from '@/lib/trpc/client';
+import { useIntegrations } from '../hooks/useIntegrations';
 import { integrationMetadata, type IntegrationType } from '@/lib/schemas';
 import { createPortal } from 'react-dom';
 
@@ -17,40 +17,39 @@ export function IntegrationModal({
   onClose,
 }: IntegrationModalProps) {
   const [isConnecting, setIsConnecting] = useState(false);
-  const utils = trpc.useUtils();
+  const { createIntegration } = useIntegrations(projectId);
 
   const metadata = integrationMetadata[integrationType];
-  const createIntegration = trpc.integrations.create.useMutation({
-    onSuccess: async (integration) => {
-      utils.integrations.listByProject.invalidate({ projectId });
-      
-      if (metadata.requiresOAuth) {
-        // Redirect to OAuth initiation route
-        const baseUrl = typeof window !== 'undefined' ? window.location.origin : '';
-        const oauthUrl = `${baseUrl}/api/integrations/oauth/${integrationType}?integrationId=${integration.id}`;
-        
-        if (typeof window !== 'undefined') {
-          window.location.href = oauthUrl;
-        }
-      } else {
-        // For file-based integrations, just close the modal
-        // File upload will be handled separately
-        onClose();
-      }
-    },
-  });
 
   const handleConnect = async () => {
     setIsConnecting(true);
     try {
-      await createIntegration.mutateAsync({
+      const integration = await createIntegration.mutateAsync({
         projectId,
         type: integrationType,
         name: metadata.name,
         description: metadata.description,
       });
+      
+      if (metadata.requiresOAuth) {
+        // Redirect to OAuth initiation route
+        const baseUrl = typeof window !== 'undefined' ? window.location.origin : '';
+        // Note: Server-side routes are deleted, so this would need to be a client-side flow or Firebase Auth provider
+        const oauthUrl = `${baseUrl}/api/integrations/oauth/${integrationType}?integrationId=${integration.id}`;
+        
+        if (typeof window !== 'undefined') {
+          // Warn about missing server route in static export
+          console.warn("OAuth route might be missing in static export:", oauthUrl);
+          // For now, we just simulate connection or show an alert
+          alert("OAuth flow requires a backend function. This is a client-side only demo.");
+          onClose();
+        }
+      } else {
+        onClose();
+      }
     } catch (error) {
       console.error('Error creating integration:', error);
+    } finally {
       setIsConnecting(false);
     }
   };

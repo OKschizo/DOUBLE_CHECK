@@ -17,6 +17,15 @@ import { hasPermission, getUserRole } from './projectMembers';
 import { syncSourceFromBudgetItem } from '../services/budgetSync';
 
 /**
+ * Remove undefined values from an object (Firestore doesn't accept undefined)
+ */
+function removeUndefined<T extends Record<string, any>>(obj: T): T {
+  return Object.fromEntries(
+    Object.entries(obj).filter(([_, v]) => v !== undefined)
+  ) as T;
+}
+
+/**
  * Map crew department to template category name
  */
 function getCategoryNameForDepartment(department: string): string {
@@ -950,7 +959,7 @@ export const budgetRouter = router({
           const days = input.rentalDays || 1;
           const estimatedAmount = dailyRate > 0 ? dailyRate * days : weeklyRate * Math.ceil(days / 7);
 
-          const itemRef = await itemsRef.add({
+          const itemData = removeUndefined({
             projectId: input.projectId,
             categoryId: categoryId!,
             description: `${item.name}${item.quantity > 1 ? ` (x${item.quantity})` : ''}`,
@@ -961,12 +970,13 @@ export const budgetRouter = router({
             quantity: days,
             unitRate: dailyRate || weeklyRate / 7,
             linkedEquipmentId: item.id,
-            vendor: item.rentalVendor,
+            vendor: item.rentalVendor || undefined, // Will be filtered out if undefined
             phase: input.phase,
             createdAt: FieldValue.serverTimestamp(),
             updatedAt: FieldValue.serverTimestamp(),
           });
 
+          const itemRef = await itemsRef.add(itemData);
           createdItems.push(itemRef.id);
         }
       }
@@ -1033,20 +1043,21 @@ export const budgetRouter = router({
       for (const location of validLocations) {
         const rentalCost = location.rentalCost || 0;
 
-        const itemRef = await itemsRef.add({
+        const itemData = removeUndefined({
           projectId: input.projectId,
           categoryId: categoryId!,
-          description: location.name,
+          description: location.name || 'Location',
           estimatedAmount: rentalCost,
           actualAmount: 0,
           status: 'estimated',
           linkedLocationId: location.id,
-          vendor: location.contactName || location.contactEmail,
+          vendor: location.contactName || location.contactEmail || undefined, // Will be filtered out if undefined
           phase: input.phase,
           createdAt: FieldValue.serverTimestamp(),
           updatedAt: FieldValue.serverTimestamp(),
         });
 
+        const itemRef = await itemsRef.add(itemData);
         createdItems.push(itemRef.id);
       }
 
@@ -1125,20 +1136,21 @@ export const budgetRouter = router({
       for (const castMember of validCastMembers) {
         const rate = castMember.rate || 0;
 
-        const itemRef = await itemsRef.add({
+        const itemData = removeUndefined({
           projectId: input.projectId,
           categoryId: categoryId!,
-          description: `${castMember.actorName} as ${castMember.characterName}`,
+          description: `${castMember.actorName || 'Actor'} as ${castMember.characterName || 'Character'}`,
           estimatedAmount: rate,
           actualAmount: 0,
           status: 'estimated',
           linkedCastMemberId: castMember.id,
-          vendor: castMember.agent,
+          vendor: castMember.agent || undefined, // Will be filtered out if undefined
           phase: input.phase,
           createdAt: FieldValue.serverTimestamp(),
           updatedAt: FieldValue.serverTimestamp(),
         });
 
+        const itemRef = await itemsRef.add(itemData);
         createdItems.push(itemRef.id);
       }
 

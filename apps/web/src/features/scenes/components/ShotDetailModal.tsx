@@ -2,12 +2,13 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { useShots } from '@/features/scenes/hooks/useShots';
-import { trpc } from '@/lib/trpc/client';
 import { uploadImage, deleteImage, generateUniqueFilename, isBlobUrl, isFirebaseStorageUrl } from '@/lib/firebase/storage';
 import type { Shot } from '@/lib/schemas';
 import Image from 'next/image';
 import { ReferenceCategoryModal } from '@/features/projects/components/ReferenceCategoryModal';
 import { useReferenceImages } from '@/features/projects/hooks/useReferenceImages';
+import { useScene } from '@/features/scenes/hooks/useScenes';
+import { useSchedule } from '@/features/projects/hooks/useSchedule';
 
 interface ShotDetailModalProps {
   sceneId: string;
@@ -34,21 +35,21 @@ export function ShotDetailModal({
   onViewShot,
   initialShotId,
 }: ShotDetailModalProps) {
-  const utils = trpc.useUtils();
-  const syncShot = trpc.shots.syncToSchedule.useMutation({
-    onSuccess: (result) => {
-      alert(result.message);
-      utils.schedule.getSchedule.invalidate({ projectId });
+  // Placeholder for syncShot - this would need to be implemented as a Cloud Function
+  const syncShot = {
+    mutate: async ({ shotId }: { shotId: string }) => {
+      console.log('Sync shot to schedule', shotId);
+      alert('Sync to schedule functionality needs to be implemented');
     },
-    onError: (error) => {
-      alert(`Failed to sync: ${error.message}`);
-    },
-  });
+    isPending: false,
+  };
   const { shots, isLoading, createShot, updateShot, deleteShot, markBestTake } = useShots(sceneId);
-  const { data: scene } = trpc.scenes.getById.useQuery({ id: sceneId });
+  const { data: scene } = useScene(sceneId);
   const { createReferenceImage } = useReferenceImages(projectId);
+  const { schedule: scheduleData, createDay } = useSchedule(projectId);
   const [showAddForm, setShowAddForm] = useState(false);
   const [editingShot, setEditingShot] = useState<Shot | null>(null);
+  const [newShootingDate, setNewShootingDate] = useState<string>('');
   
   const [showReferenceCategoryModal, setShowReferenceCategoryModal] = useState(false);
   const [pendingReferenceUrl, setPendingReferenceUrl] = useState<string | null>(null);
@@ -316,13 +317,20 @@ export function ShotDetailModal({
       const submitData: any = {
         ...formData,
         imageUrl,
-        focalLength: formData.focalLength ? parseFloat(formData.focalLength) : undefined,
-        frameRate: formData.frameRate ? parseFloat(formData.frameRate) : undefined,
-        duration: formData.duration ? parseFloat(formData.duration) : undefined,
+        // Only include numeric fields if they have a value
+        ...(formData.focalLength ? { focalLength: parseFloat(formData.focalLength) } : {}),
+        ...(formData.frameRate ? { frameRate: parseFloat(formData.frameRate) } : {}),
+        ...(formData.duration ? { duration: parseFloat(formData.duration) } : {}),
       };
 
+      // Remove empty strings, empty arrays, null, and undefined values
       Object.keys(submitData).forEach((key) => {
-        if (submitData[key] === '' || (Array.isArray(submitData[key]) && submitData[key].length === 0)) {
+        if (
+          submitData[key] === '' || 
+          submitData[key] === undefined || 
+          submitData[key] === null ||
+          (Array.isArray(submitData[key]) && submitData[key].length === 0)
+        ) {
           delete submitData[key];
         }
       });
@@ -461,17 +469,70 @@ export function ShotDetailModal({
     setFormData({ ...formData, shootingDayIds: formData.shootingDayIds.filter(id => id !== shootingDayId) });
   };
 
+  // Create a new shooting day and add it to the shot
+  const handleAddNewShootingDay = async () => {
+    if (!newShootingDate) return;
+    
+    const dateToAdd = new Date(newShootingDate);
+    
+    // Check if a day already exists for this date
+    const allDays = scheduleData?.days || schedule?.days || [];
+    const existingDay = allDays.find((d: any) => {
+      const existingDate = new Date(d.date);
+      return existingDate.toDateString() === dateToAdd.toDateString();
+    });
+    
+    if (existingDay) {
+      // Day exists, just add it to the shot
+      addShootingDay(existingDay.id);
+      setNewShootingDate('');
+      return;
+    }
+    
+    // Create a new shooting day
+    try {
+      // Calculate the next day number
+      const nextDayNumber = allDays.length > 0 
+        ? Math.max(...allDays.map((d: any) => d.dayNumber || 0)) + 1 
+        : 1;
+      
+      // Create the new day and get the new ID back
+      const newDayId = await createDay.mutateAsync({
+        date: dateToAdd,
+        dayNumber: nextDayNumber,
+        title: `Day ${nextDayNumber}`,
+        sceneIds: [sceneId],
+        status: 'scheduled',
+      });
+      
+      // Add the new day directly using the returned ID
+      if (newDayId) {
+        addShootingDay(newDayId);
+      }
+      
+      setNewShootingDate('');
+    } catch (error) {
+      console.error('Failed to create shooting day:', error);
+      alert('Failed to create shooting day');
+    }
+  };
+  
+  // Determine if we're in single-shot edit mode (opened from another modal)
+  const isSingleShotMode = !!initialShotId;
+
   const selectedCast = castMembers.filter(c => formData.castIds.includes(c.id));
   const selectedCrew = crewMembers.filter(c => formData.crewIds.includes(c.id));
   const selectedEquipment = equipment.filter(e => formData.equipmentIds.includes(e.id));
   const selectedLocations = locations.filter(l => formData.locationIds.includes(l.id));
-  const selectedShootingDays = schedule?.days?.filter((d: any) => formData.shootingDayIds.includes(d.id)) || [];
+  // Use scheduleData from hook for real-time updates, fallback to schedule prop
+  const allShootingDays = scheduleData?.days?.length > 0 ? scheduleData.days : (schedule?.days || []);
+  const selectedShootingDays = allShootingDays.filter((d: any) => formData.shootingDayIds.includes(d.id)) || [];
 
   const availableCast = castMembers.filter(c => !formData.castIds.includes(c.id));
   const availableCrew = crewMembers.filter(c => !formData.crewIds.includes(c.id));
   const availableEquipment = equipment.filter(e => !formData.equipmentIds.includes(e.id));
   const availableLocations = locations.filter(l => !formData.locationIds.includes(l.id));
-  const availableShootingDays = schedule?.days?.filter((d: any) => !formData.shootingDayIds.includes(d.id)) || [];
+  const availableShootingDays = allShootingDays.filter((d: any) => !formData.shootingDayIds.includes(d.id)) || [];
   
   // Filtered lists based on search
   const filteredCast = availableCast.filter(c => 
@@ -512,21 +573,37 @@ export function ShotDetailModal({
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
       <div className="bg-background-primary rounded-lg max-w-4xl w-full max-h-[90vh] overflow-hidden flex flex-col">
         <div className="p-6 border-b border-border-default flex justify-between items-center">
-          <h2 className="text-2xl font-bold text-text-primary">Shots</h2>
-          <button
-            onClick={() => {
-              setShowAddForm(true);
-              setEditingShot(null);
-              setImageFile(null);
-              setImagePreview(null);
-            }}
-            className="btn-primary flex items-center gap-2"
-          >
-            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-            </svg>
-            Add Shot
-          </button>
+          <h2 className="text-2xl font-bold text-text-primary">
+            {isSingleShotMode && editingShot 
+              ? `Edit Shot ${editingShot.shotNumber}` 
+              : 'Shots'}
+          </h2>
+          {!isSingleShotMode && (
+            <button
+              onClick={() => {
+                setShowAddForm(true);
+                setEditingShot(null);
+                setImageFile(null);
+                setImagePreview(null);
+              }}
+              className="btn-primary flex items-center gap-2"
+            >
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+              </svg>
+              Add Shot
+            </button>
+          )}
+          {isSingleShotMode && (
+            <button
+              onClick={onClose}
+              className="p-2 text-text-secondary hover:text-text-primary hover:bg-background-tertiary rounded transition-colors"
+            >
+              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          )}
         </div>
 
         <div className="flex-1 overflow-y-auto p-6">
@@ -933,11 +1010,37 @@ export function ShotDetailModal({
                                   </button>
                                 ))
                               ) : (
-                                <div className="px-4 py-2 text-sm text-text-tertiary">No results found</div>
+                                <div className="px-4 py-2 text-sm text-text-tertiary">No existing days found</div>
                               )}
                             </div>
                           </div>
                         )}
+                      </div>
+                      
+                      {/* Date picker to create new shooting day */}
+                      <div className="mt-3 p-3 bg-background-tertiary rounded-lg border border-border-default">
+                        <label className="block text-xs font-medium text-text-secondary mb-2">
+                          Or add a new shooting date:
+                        </label>
+                        <div className="flex gap-2">
+                          <input
+                            type="date"
+                            value={newShootingDate}
+                            onChange={(e) => setNewShootingDate(e.target.value)}
+                            className="flex-1 px-3 py-2 bg-background-secondary border border-border-default rounded text-sm text-text-primary focus:outline-none focus:border-accent-primary"
+                          />
+                          <button
+                            type="button"
+                            onClick={handleAddNewShootingDay}
+                            disabled={!newShootingDate}
+                            className="px-3 py-2 bg-accent-primary text-white rounded text-sm hover:bg-accent-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                          >
+                            Add
+                          </button>
+                        </div>
+                        <p className="text-xs text-text-tertiary mt-2">
+                          If this date doesn&apos;t exist as a shooting day, one will be created automatically.
+                        </p>
                       </div>
                     </div>
                   </div>
@@ -1264,27 +1367,31 @@ export function ShotDetailModal({
                 </div>
               </div>
 
-              <div className="flex justify-end gap-3">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowAddForm(false);
-                    setEditingShot(null);
-                    setImageFile(null);
-                    setImagePreview(null);
-                  }}
-                  className="btn-secondary"
-                >
-                  Cancel
-                </button>
-                <button type="submit" className="btn-primary" disabled={uploadingImage}>
-                  {uploadingImage ? 'Uploading...' : editingShot ? 'Update Shot' : 'Create Shot'}
-                </button>
-              </div>
+              {/* Only show inline buttons if not in single-shot mode */}
+              {!isSingleShotMode && (
+                <div className="flex justify-end gap-3">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowAddForm(false);
+                      setEditingShot(null);
+                      setImageFile(null);
+                      setImagePreview(null);
+                    }}
+                    className="btn-secondary"
+                  >
+                    Cancel
+                  </button>
+                  <button type="submit" className="btn-primary" disabled={uploadingImage}>
+                    {uploadingImage ? 'Uploading...' : editingShot ? 'Update Shot' : 'Create Shot'}
+                  </button>
+                </div>
+              )}
             </form>
           ) : null}
 
-          {shots.length === 0 ? (
+          {/* Hide shots list in single-shot mode */}
+          {!isSingleShotMode && (shots.length === 0 ? (
             <div className="text-center py-12">
               <p className="text-text-secondary">No shots yet. Add your first shot above.</p>
             </div>
@@ -1486,12 +1593,12 @@ export function ShotDetailModal({
                 );
               })}
             </div>
-          )}
+          ))}
         </div>
 
         <div className="p-6 border-t border-border-default flex justify-between items-center">
           <div>
-            {editingShot && (() => {
+            {editingShot && !isSingleShotMode && (() => {
               const shotShootingDayIds = editingShot.shootingDayIds || [];
               const sceneShootingDayIds = scene?.shootingDayIds || (scene?.shootingDayId ? [scene.shootingDayId] : []);
               const hasShootingDays = shotShootingDayIds.length > 0 || sceneShootingDayIds.length > 0;
@@ -1510,9 +1617,33 @@ export function ShotDetailModal({
               ) : null;
             })()}
           </div>
-          <button onClick={onClose} className="btn-primary">
-            Close
-          </button>
+          
+          {/* Footer buttons depend on mode */}
+          {isSingleShotMode ? (
+            <div className="flex gap-3">
+              <button 
+                onClick={onClose} 
+                className="btn-secondary"
+              >
+                Cancel
+              </button>
+              <button 
+                onClick={() => {
+                  // Trigger form submit
+                  const form = document.querySelector('form');
+                  if (form) form.requestSubmit();
+                }}
+                className="btn-primary" 
+                disabled={uploadingImage}
+              >
+                {uploadingImage ? 'Uploading...' : 'Update Shot'}
+              </button>
+            </div>
+          ) : (
+            <button onClick={onClose} className="btn-primary">
+              Close
+            </button>
+          )}
         </div>
       </div>
 

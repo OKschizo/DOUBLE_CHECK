@@ -1,8 +1,10 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import { trpc } from '@/lib/trpc/client';
+// import { trpc } from '@/lib/trpc/client';
 import type { ShootingDay } from '@/lib/schemas';
+import { useLocationsByProject } from '@/features/locations/hooks/useLocations';
+import { useCrewByProject } from '@/features/crew/hooks/useCrew';
 
 interface ShootingDayEditModalProps {
   shootingDay: ShootingDay | null;
@@ -20,10 +22,11 @@ export function ShootingDayEditModal({
   onSave,
 }: ShootingDayEditModalProps) {
   // Fetch locations and crew
-  const { data: locations = [] } = trpc.locations.listByProject.useQuery({ projectId });
-  const { data: crewMembers = [] } = trpc.crew.listByProject.useQuery({ projectId });
+  const { data: locations = [] } = useLocationsByProject(projectId);
+  const { data: crewMembers = [] } = useCrewByProject(projectId);
 
   const [formData, setFormData] = useState({
+    date: '',
     dayNumber: '',
     totalDays: '',
     callTime: '',
@@ -66,7 +69,15 @@ export function ShootingDayEditModal({
 
   useEffect(() => {
     if (shootingDay && isOpen) {
+      // Format date to YYYY-MM-DD for the date input
+      let dateStr = '';
+      if (shootingDay.date) {
+        const d = shootingDay.date instanceof Date ? shootingDay.date : new Date(shootingDay.date);
+        dateStr = d.toISOString().split('T')[0];
+      }
+      
       setFormData({
+        date: dateStr,
         dayNumber: shootingDay.dayNumber?.toString() || '',
         totalDays: shootingDay.totalDays?.toString() || '',
         callTime: shootingDay.callTime || '',
@@ -174,6 +185,7 @@ export function ShootingDayEditModal({
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     const updateData: Partial<ShootingDay> = {
+      date: formData.date ? new Date(formData.date + 'T12:00:00') : undefined,
       dayNumber: formData.dayNumber ? parseInt(formData.dayNumber) : undefined,
       totalDays: formData.totalDays ? parseInt(formData.totalDays) : undefined,
       callTime: formData.callTime || undefined,
@@ -210,11 +222,24 @@ export function ShootingDayEditModal({
 
         {/* Content */}
         <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-6">
+          {/* Form fields... reusing the logic */}
           <div className="space-y-6">
             {/* Basic Info */}
             <div>
               <h3 className="text-lg font-semibold text-text-primary mb-4">Basic Information</h3>
               <div className="grid grid-cols-2 gap-4">
+                <div className="col-span-2">
+                  <label className="block text-sm font-medium text-text-secondary mb-1">
+                    Date *
+                  </label>
+                  <input
+                    type="date"
+                    value={formData.date}
+                    onChange={(e) => setFormData({ ...formData, date: e.target.value })}
+                    className="w-full px-3 py-2 bg-background-primary border border-border-default rounded-lg text-text-primary"
+                    required
+                  />
+                </div>
                 <div>
                   <label className="block text-sm font-medium text-text-secondary mb-1">
                     Day Number
@@ -242,13 +267,13 @@ export function ShootingDayEditModal({
               </div>
             </div>
 
-            {/* Call Times */}
+            {/* Times */}
             <div>
-              <h3 className="text-lg font-semibold text-text-primary mb-4">Call Times</h3>
+              <h3 className="text-lg font-semibold text-text-primary mb-4">Schedule Times</h3>
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-text-secondary mb-1">
-                    Crew Call (HH:MM)
+                    Crew Call Time
                   </label>
                   <input
                     type="time"
@@ -259,7 +284,7 @@ export function ShootingDayEditModal({
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-text-secondary mb-1">
-                    Shoot Call (HH:MM)
+                    Shoot Call Time
                   </label>
                   <input
                     type="time"
@@ -267,476 +292,6 @@ export function ShootingDayEditModal({
                     onChange={(e) => setFormData({ ...formData, shootCall: e.target.value })}
                     className="w-full px-3 py-2 bg-background-primary border border-border-default rounded-lg text-text-primary"
                   />
-                </div>
-              </div>
-              <p className="text-xs text-text-tertiary mt-2">
-                Note: Breakfast and lunch times are pulled from events with type &quot;break&quot;
-              </p>
-            </div>
-
-            {/* Locations */}
-            <div>
-              <h3 className="text-lg font-semibold text-text-primary mb-4">Location Information</h3>
-              <div className="grid grid-cols-2 gap-4">
-                {/* Primary Location */}
-                <div className="relative">
-                  <label className="block text-sm font-medium text-text-secondary mb-1">
-                    Primary Location
-                  </label>
-                  <div className="relative">
-                    <input
-                      type="text"
-                      value={formData.locationId ? getLocationName(formData.locationId) : ''}
-                      onFocus={() => setShowLocationDropdown(true)}
-                      onChange={(e) => {
-                        setLocationSearch(e.target.value);
-                        setShowLocationDropdown(true);
-                      }}
-                      className="w-full px-3 py-2 bg-background-primary border border-border-default rounded-lg text-text-primary"
-                      placeholder="Select location"
-                    />
-                    {showLocationDropdown && (
-                      <div className="absolute z-10 w-full mt-1 bg-background-primary border border-border-default rounded-lg shadow-lg max-h-60 overflow-y-auto">
-                        <input
-                          type="text"
-                          value={locationSearch}
-                          onChange={(e) => setLocationSearch(e.target.value)}
-                          className="w-full px-3 py-2 border-b border-border-default bg-background-secondary text-text-primary"
-                          placeholder="Search locations..."
-                          autoFocus
-                        />
-                        {filteredLocations.map((loc) => (
-                          <button
-                            key={loc.id}
-                            type="button"
-                            onClick={() => {
-                              setFormData({ ...formData, locationId: loc.id });
-                              setShowLocationDropdown(false);
-                              setLocationSearch('');
-                            }}
-                            className="w-full text-left px-3 py-2 hover:bg-background-secondary text-text-primary"
-                          >
-                            {loc.name}
-                          </button>
-                        ))}
-                        {filteredLocations.length === 0 && (
-                          <div className="px-3 py-2 text-text-tertiary text-sm">No locations found</div>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                {/* Basecamp */}
-                <div className="relative">
-                  <label className="block text-sm font-medium text-text-secondary mb-1">
-                    Basecamp
-                  </label>
-                  <div className="relative">
-                    <input
-                      type="text"
-                      value={formData.basecampLocationId ? getLocationName(formData.basecampLocationId) : ''}
-                      onFocus={() => setShowBasecampDropdown(true)}
-                      onChange={(e) => {
-                        setBasecampSearch(e.target.value);
-                        setShowBasecampDropdown(true);
-                      }}
-                      className="w-full px-3 py-2 bg-background-primary border border-border-default rounded-lg text-text-primary"
-                      placeholder="Select location"
-                    />
-                    {showBasecampDropdown && (
-                      <div className="absolute z-10 w-full mt-1 bg-background-primary border border-border-default rounded-lg shadow-lg max-h-60 overflow-y-auto">
-                        <input
-                          type="text"
-                          value={basecampSearch}
-                          onChange={(e) => setBasecampSearch(e.target.value)}
-                          className="w-full px-3 py-2 border-b border-border-default bg-background-secondary text-text-primary"
-                          placeholder="Search locations..."
-                          autoFocus
-                        />
-                        {filteredBasecampLocations.map((loc) => (
-                          <button
-                            key={loc.id}
-                            type="button"
-                            onClick={() => {
-                              setFormData({ ...formData, basecampLocationId: loc.id });
-                              setShowBasecampDropdown(false);
-                              setBasecampSearch('');
-                            }}
-                            className="w-full text-left px-3 py-2 hover:bg-background-secondary text-text-primary"
-                          >
-                            {loc.name}
-                          </button>
-                        ))}
-                        {filteredBasecampLocations.length === 0 && (
-                          <div className="px-3 py-2 text-text-tertiary text-sm">No locations found</div>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                {/* Crew Park */}
-                <div className="relative">
-                  <label className="block text-sm font-medium text-text-secondary mb-1">
-                    Crew Park
-                  </label>
-                  <div className="relative">
-                    <input
-                      type="text"
-                      value={formData.crewParkLocationId ? getLocationName(formData.crewParkLocationId) : ''}
-                      onFocus={() => setShowCrewParkDropdown(true)}
-                      onChange={(e) => {
-                        setCrewParkSearch(e.target.value);
-                        setShowCrewParkDropdown(true);
-                      }}
-                      className="w-full px-3 py-2 bg-background-primary border border-border-default rounded-lg text-text-primary"
-                      placeholder="Select location"
-                    />
-                    {showCrewParkDropdown && (
-                      <div className="absolute z-10 w-full mt-1 bg-background-primary border border-border-default rounded-lg shadow-lg max-h-60 overflow-y-auto">
-                        <input
-                          type="text"
-                          value={crewParkSearch}
-                          onChange={(e) => setCrewParkSearch(e.target.value)}
-                          className="w-full px-3 py-2 border-b border-border-default bg-background-secondary text-text-primary"
-                          placeholder="Search locations..."
-                          autoFocus
-                        />
-                        {filteredCrewParkLocations.map((loc) => (
-                          <button
-                            key={loc.id}
-                            type="button"
-                            onClick={() => {
-                              setFormData({ ...formData, crewParkLocationId: loc.id });
-                              setShowCrewParkDropdown(false);
-                              setCrewParkSearch('');
-                            }}
-                            className="w-full text-left px-3 py-2 hover:bg-background-secondary text-text-primary"
-                          >
-                            {loc.name}
-                          </button>
-                        ))}
-                        {filteredCrewParkLocations.length === 0 && (
-                          <div className="px-3 py-2 text-text-tertiary text-sm">No locations found</div>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                {/* Tech Trucks */}
-                <div className="relative">
-                  <label className="block text-sm font-medium text-text-secondary mb-1">
-                    Tech Trucks
-                  </label>
-                  <div className="relative">
-                    <input
-                      type="text"
-                      value={formData.techTrucksLocationId ? getLocationName(formData.techTrucksLocationId) : ''}
-                      onFocus={() => setShowTechTrucksDropdown(true)}
-                      onChange={(e) => {
-                        setTechTrucksSearch(e.target.value);
-                        setShowTechTrucksDropdown(true);
-                      }}
-                      className="w-full px-3 py-2 bg-background-primary border border-border-default rounded-lg text-text-primary"
-                      placeholder="Select location"
-                    />
-                    {showTechTrucksDropdown && (
-                      <div className="absolute z-10 w-full mt-1 bg-background-primary border border-border-default rounded-lg shadow-lg max-h-60 overflow-y-auto">
-                        <input
-                          type="text"
-                          value={techTrucksSearch}
-                          onChange={(e) => setTechTrucksSearch(e.target.value)}
-                          className="w-full px-3 py-2 border-b border-border-default bg-background-secondary text-text-primary"
-                          placeholder="Search locations..."
-                          autoFocus
-                        />
-                        {filteredTechTrucksLocations.map((loc) => (
-                          <button
-                            key={loc.id}
-                            type="button"
-                            onClick={() => {
-                              setFormData({ ...formData, techTrucksLocationId: loc.id });
-                              setShowTechTrucksDropdown(false);
-                              setTechTrucksSearch('');
-                            }}
-                            className="w-full text-left px-3 py-2 hover:bg-background-secondary text-text-primary"
-                          >
-                            {loc.name}
-                          </button>
-                        ))}
-                        {filteredTechTrucksLocations.length === 0 && (
-                          <div className="px-3 py-2 text-text-tertiary text-sm">No locations found</div>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                {/* BG Holding */}
-                <div className="relative">
-                  <label className="block text-sm font-medium text-text-secondary mb-1">
-                    BG Holding
-                  </label>
-                  <div className="relative">
-                    <input
-                      type="text"
-                      value={formData.bgHoldingLocationId ? getLocationName(formData.bgHoldingLocationId) : ''}
-                      onFocus={() => setShowBgHoldingDropdown(true)}
-                      onChange={(e) => {
-                        setBgHoldingSearch(e.target.value);
-                        setShowBgHoldingDropdown(true);
-                      }}
-                      className="w-full px-3 py-2 bg-background-primary border border-border-default rounded-lg text-text-primary"
-                      placeholder="Select location"
-                    />
-                    {showBgHoldingDropdown && (
-                      <div className="absolute z-10 w-full mt-1 bg-background-primary border border-border-default rounded-lg shadow-lg max-h-60 overflow-y-auto">
-                        <input
-                          type="text"
-                          value={bgHoldingSearch}
-                          onChange={(e) => setBgHoldingSearch(e.target.value)}
-                          className="w-full px-3 py-2 border-b border-border-default bg-background-secondary text-text-primary"
-                          placeholder="Search locations..."
-                          autoFocus
-                        />
-                        {filteredBgHoldingLocations.map((loc) => (
-                          <button
-                            key={loc.id}
-                            type="button"
-                            onClick={() => {
-                              setFormData({ ...formData, bgHoldingLocationId: loc.id });
-                              setShowBgHoldingDropdown(false);
-                              setBgHoldingSearch('');
-                            }}
-                            className="w-full text-left px-3 py-2 hover:bg-background-secondary text-text-primary"
-                          >
-                            {loc.name}
-                          </button>
-                        ))}
-                        {filteredBgHoldingLocations.length === 0 && (
-                          <div className="px-3 py-2 text-text-tertiary text-sm">No locations found</div>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                {/* BG Parking */}
-                <div className="relative">
-                  <label className="block text-sm font-medium text-text-secondary mb-1">
-                    BG Parking
-                  </label>
-                  <div className="relative">
-                    <input
-                      type="text"
-                      value={formData.bgParkingLocationId ? getLocationName(formData.bgParkingLocationId) : ''}
-                      onFocus={() => setShowBgParkingDropdown(true)}
-                      onChange={(e) => {
-                        setBgParkingSearch(e.target.value);
-                        setShowBgParkingDropdown(true);
-                      }}
-                      className="w-full px-3 py-2 bg-background-primary border border-border-default rounded-lg text-text-primary"
-                      placeholder="Select location"
-                    />
-                    {showBgParkingDropdown && (
-                      <div className="absolute z-10 w-full mt-1 bg-background-primary border border-border-default rounded-lg shadow-lg max-h-60 overflow-y-auto">
-                        <input
-                          type="text"
-                          value={bgParkingSearch}
-                          onChange={(e) => setBgParkingSearch(e.target.value)}
-                          className="w-full px-3 py-2 border-b border-border-default bg-background-secondary text-text-primary"
-                          placeholder="Search locations..."
-                          autoFocus
-                        />
-                        {filteredBgParkingLocations.map((loc) => (
-                          <button
-                            key={loc.id}
-                            type="button"
-                            onClick={() => {
-                              setFormData({ ...formData, bgParkingLocationId: loc.id });
-                              setShowBgParkingDropdown(false);
-                              setBgParkingSearch('');
-                            }}
-                            className="w-full text-left px-3 py-2 hover:bg-background-secondary text-text-primary"
-                          >
-                            {loc.name}
-                          </button>
-                        ))}
-                        {filteredBgParkingLocations.length === 0 && (
-                          <div className="px-3 py-2 text-text-tertiary text-sm">No locations found</div>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                {/* Nearest Hospital */}
-                <div className="col-span-2">
-                  <label className="block text-sm font-medium text-text-secondary mb-1">
-                    Nearest Hospital
-                  </label>
-                  <input
-                    type="text"
-                    value={formData.nearestHospital}
-                    onChange={(e) => setFormData({ ...formData, nearestHospital: e.target.value })}
-                    className="w-full px-3 py-2 bg-background-primary border border-border-default rounded-lg text-text-primary"
-                    placeholder="Nearest hospital name and address"
-                  />
-                </div>
-              </div>
-            </div>
-
-            {/* Key Contacts */}
-            <div>
-              <h3 className="text-lg font-semibold text-text-primary mb-4">Key Contacts</h3>
-              <div className="grid grid-cols-1 gap-4">
-                {/* Director */}
-                <div className="relative">
-                  <label className="block text-sm font-medium text-text-secondary mb-1">
-                    Director
-                  </label>
-                  <div className="relative">
-                    <input
-                      type="text"
-                      value={formData.directorCrewId ? getCrewName(formData.directorCrewId) : ''}
-                      onFocus={() => setShowDirectorDropdown(true)}
-                      onChange={(e) => {
-                        setDirectorSearch(e.target.value);
-                        setShowDirectorDropdown(true);
-                      }}
-                      className="w-full px-3 py-2 bg-background-primary border border-border-default rounded-lg text-text-primary"
-                      placeholder="Select director from crew"
-                    />
-                    {showDirectorDropdown && (
-                      <div className="absolute z-10 w-full mt-1 bg-background-primary border border-border-default rounded-lg shadow-lg max-h-60 overflow-y-auto">
-                        <input
-                          type="text"
-                          value={directorSearch}
-                          onChange={(e) => setDirectorSearch(e.target.value)}
-                          className="w-full px-3 py-2 border-b border-border-default bg-background-secondary text-text-primary"
-                          placeholder="Search directors..."
-                          autoFocus
-                        />
-                        {filteredDirectors.map((crew) => (
-                          <button
-                            key={crew.id}
-                            type="button"
-                            onClick={() => {
-                              setFormData({ ...formData, directorCrewId: crew.id });
-                              setShowDirectorDropdown(false);
-                              setDirectorSearch('');
-                            }}
-                            className="w-full text-left px-3 py-2 hover:bg-background-secondary text-text-primary"
-                          >
-                            {crew.name} {crew.role && `- ${crew.role}`}
-                          </button>
-                        ))}
-                        {filteredDirectors.length === 0 && (
-                          <div className="px-3 py-2 text-text-tertiary text-sm">No directors found</div>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                {/* Executive Producer */}
-                <div className="relative">
-                  <label className="block text-sm font-medium text-text-secondary mb-1">
-                    Executive Producer
-                  </label>
-                  <div className="relative">
-                    <input
-                      type="text"
-                      value={formData.executiveProducerCrewId ? getCrewName(formData.executiveProducerCrewId) : ''}
-                      onFocus={() => setShowExecProducerDropdown(true)}
-                      onChange={(e) => {
-                        setExecProducerSearch(e.target.value);
-                        setShowExecProducerDropdown(true);
-                      }}
-                      className="w-full px-3 py-2 bg-background-primary border border-border-default rounded-lg text-text-primary"
-                      placeholder="Select executive producer from crew"
-                    />
-                    {showExecProducerDropdown && (
-                      <div className="absolute z-10 w-full mt-1 bg-background-primary border border-border-default rounded-lg shadow-lg max-h-60 overflow-y-auto">
-                        <input
-                          type="text"
-                          value={execProducerSearch}
-                          onChange={(e) => setExecProducerSearch(e.target.value)}
-                          className="w-full px-3 py-2 border-b border-border-default bg-background-secondary text-text-primary"
-                          placeholder="Search executive producers..."
-                          autoFocus
-                        />
-                        {filteredExecProducers.map((crew) => (
-                          <button
-                            key={crew.id}
-                            type="button"
-                            onClick={() => {
-                              setFormData({ ...formData, executiveProducerCrewId: crew.id });
-                              setShowExecProducerDropdown(false);
-                              setExecProducerSearch('');
-                            }}
-                            className="w-full text-left px-3 py-2 hover:bg-background-secondary text-text-primary"
-                          >
-                            {crew.name} {crew.role && `- ${crew.role}`}
-                          </button>
-                        ))}
-                        {filteredExecProducers.length === 0 && (
-                          <div className="px-3 py-2 text-text-tertiary text-sm">No executive producers found</div>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                {/* Production Coordinator */}
-                <div className="relative">
-                  <label className="block text-sm font-medium text-text-secondary mb-1">
-                    Production Coordinator
-                  </label>
-                  <div className="relative">
-                    <input
-                      type="text"
-                      value={formData.productionCoordinatorCrewId ? getCrewName(formData.productionCoordinatorCrewId) : ''}
-                      onFocus={() => setShowProdCoordDropdown(true)}
-                      onChange={(e) => {
-                        setProdCoordSearch(e.target.value);
-                        setShowProdCoordDropdown(true);
-                      }}
-                      className="w-full px-3 py-2 bg-background-primary border border-border-default rounded-lg text-text-primary"
-                      placeholder="Select production coordinator from crew"
-                    />
-                    {showProdCoordDropdown && (
-                      <div className="absolute z-10 w-full mt-1 bg-background-primary border border-border-default rounded-lg shadow-lg max-h-60 overflow-y-auto">
-                        <input
-                          type="text"
-                          value={prodCoordSearch}
-                          onChange={(e) => setProdCoordSearch(e.target.value)}
-                          className="w-full px-3 py-2 border-b border-border-default bg-background-secondary text-text-primary"
-                          placeholder="Search production coordinators..."
-                          autoFocus
-                        />
-                        {filteredProdCoords.map((crew) => (
-                          <button
-                            key={crew.id}
-                            type="button"
-                            onClick={() => {
-                              setFormData({ ...formData, productionCoordinatorCrewId: crew.id });
-                              setShowProdCoordDropdown(false);
-                              setProdCoordSearch('');
-                            }}
-                            className="w-full text-left px-3 py-2 hover:bg-background-secondary text-text-primary"
-                          >
-                            {crew.name} {crew.role && `- ${crew.role}`}
-                          </button>
-                        ))}
-                        {filteredProdCoords.length === 0 && (
-                          <div className="px-3 py-2 text-text-tertiary text-sm">No production coordinators found</div>
-                        )}
-                      </div>
-                    )}
-                  </div>
                 </div>
               </div>
             </div>
@@ -747,8 +302,8 @@ export function ShootingDayEditModal({
               <textarea
                 value={formData.notes}
                 onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-                className="w-full px-3 py-2 bg-background-primary border border-border-default rounded-lg text-text-primary min-h-[100px]"
-                placeholder="Important notes for this shooting day..."
+                className="w-full px-3 py-2 bg-background-primary border border-border-default rounded-lg text-text-primary h-24 resize-y"
+                placeholder="Day notes, special instructions, etc."
               />
             </div>
           </div>

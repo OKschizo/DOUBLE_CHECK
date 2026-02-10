@@ -1,11 +1,11 @@
 'use client';
 
-import { trpc } from '@/lib/trpc/client';
 import { useShots } from '@/features/scenes/hooks/useShots';
 import { getProjectTerminology } from '@/shared/utils/projectTerminology';
 import { isFirebaseStorageUrl } from '@/lib/firebase/storage';
 import type { Scene } from '@/lib/schemas';
 import Image from 'next/image';
+import { useProject } from '@/features/projects/hooks/useProjects';
 
 interface SceneViewModalProps {
   scene: Scene;
@@ -34,30 +34,27 @@ export function SceneViewModal({
   onNavigate,
   onViewShot,
 }: SceneViewModalProps) {
-  const utils = trpc.useUtils();
-  const { data: project } = trpc.projects.getById.useQuery({ id: projectId });
-  const { shots } = useShots(scene.id);
+  const { data: project } = useProject(projectId);
+  const { shots = [] } = useShots(scene.id);
   const terminology = getProjectTerminology(project?.projectType);
 
-  const syncScene = trpc.scenes.syncToSchedule.useMutation({
-    onSuccess: (result) => {
-      alert(result.message);
-      utils.schedule.getSchedule.invalidate({ projectId });
+  // Placeholder for syncScene - this would need to be implemented as a Cloud Function
+  const syncScene = {
+    mutate: async ({ sceneId }: { sceneId: string }) => {
+      console.log('Sync scene to schedule', sceneId);
+      alert('Sync to schedule functionality needs to be implemented');
     },
-    onError: (error) => {
-      alert(`Failed to sync: ${error.message}`);
-    },
-  });
+    isPending: false,
+  };
 
-  const syncShot = trpc.shots.syncToSchedule.useMutation({
-    onSuccess: (result) => {
-      alert(result.message);
-      utils.schedule.getSchedule.invalidate({ projectId });
+  // Placeholder for syncShot - this would need to be implemented as a Cloud Function
+  const syncShot = {
+    mutate: async ({ shotId }: { shotId: string }) => {
+      console.log('Sync shot to schedule', shotId);
+      alert('Sync to schedule functionality needs to be implemented');
     },
-    onError: (error) => {
-      alert(`Failed to sync: ${error.message}`);
-    },
-  });
+    isPending: false,
+  };
 
   const handleNavigate = (view: string, elementId?: string) => {
     const hash = elementId ? `${view}?id=${elementId}` : view;

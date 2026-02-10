@@ -207,3 +207,293 @@
     transform: translateX(100%);
   }
 }
+
+/* Mobile-specific improvements */
+@media (max-width: 767px) {
+  /* Larger touch targets on mobile */
+  button, a, [role="button"] {
+    min-height: 44px;
+  }
+  
+  /* Improve input fields on mobile */
+  input, select, textarea {
+    font-size: 16px !important; /* Prevents iOS zoom on focus */
+  }
+  
+  /* Better scrolling on mobile */
+  .overflow-y-auto, .overflow-x-auto {
+    -webkit-overflow-scrolling: touch;
+  }
+}
+
+/* Slide-in animations for mobile menus */
+@keyframes slideInFromLeft {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
+@keyframes slideInFromRight {
+  from {
+    transform: translateX(100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
+@keyframes slideInFromBottom {
+  from {
+    transform: translateY(100%);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.animate-in {
+  animation-duration: 200ms;
+  animation-timing-function: ease-out;
+  animation-fill-mode: both;
+}
+
+.slide-in-from-left {
+  animation-name: slideInFromLeft;
+}
+
+.slide-in-from-right {
+  animation-name: slideInFromRight;
+}
+
+.slide-in-from-bottom {
+  animation-name: slideInFromBottom;
+}
+
+.fade-in {
+  animation-name: fadeIn;
+}
+
+/* Safe area insets for notched devices */
+@supports (padding: env(safe-area-inset-bottom)) {
+  .safe-area-bottom {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+  
+  .safe-area-top {
+    padding-top: env(safe-area-inset-top);
+  }
+}
+
+/* Hide scrollbar utility */
+.scrollbar-hide {
+  -ms-overflow-style: none;  /* IE and Edge */
+  scrollbar-width: none;  /* Firefox */
+}
+
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;  /* Chrome, Safari and Opera */
+}
+
+/* ==================== PRINT STYLES ==================== */
+@media print {
+  /* Reset colors for printing */
+  * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+  
+  /* Hide non-print elements */
+  .print\\:hidden {
+    display: none !important;
+  }
+  
+  /* Show print-only elements */
+  .print\\:block {
+    display: block !important;
+  }
+  
+  /* Reset backgrounds and colors for readability */
+  body {
+    background: white !important;
+    color: black !important;
+  }
+  
+  /* Call sheet specific print styles */
+  .print\\:p-0 {
+    padding: 0 !important;
+  }
+  
+  .print\\:p-4 {
+    padding: 1rem !important;
+  }
+  
+  .print\\:p-6 {
+    padding: 1.5rem !important;
+  }
+  
+  .print\\:my-0 {
+    margin-top: 0 !important;
+    margin-bottom: 0 !important;
+  }
+  
+  .print\\:mt-4 {
+    margin-top: 1rem !important;
+  }
+  
+  .print\\:rounded-none {
+    border-radius: 0 !important;
+  }
+  
+  .print\\:border-none {
+    border: none !important;
+  }
+  
+  .print\\:max-w-full {
+    max-width: 100% !important;
+  }
+  
+  .print\\:max-h-full {
+    max-height: 100% !important;
+  }
+  
+  .print\\:space-y-3 > * + * {
+    margin-top: 0.75rem !important;
+  }
+  
+  .print\\:space-y-4 > * + * {
+    margin-top: 1rem !important;
+  }
+  
+  .print\\:mb-4 {
+    margin-bottom: 1rem !important;
+  }
+  
+  .print\\:text-2xl {
+    font-size: 1.5rem !important;
+  }
+  
+  .print\\:text-base {
+    font-size: 1rem !important;
+  }
+  
+  .print\\:overflow-visible {
+    overflow: visible !important;
+  }
+  
+  /* Page break controls */
+  .print\\:break-before-page,
+  .page-break-before {
+    page-break-before: always !important;
+    break-before: page !important;
+  }
+  
+  .print\\:break-after-page,
+  .page-break-after {
+    page-break-after: always !important;
+    break-after: page !important;
+  }
+  
+  .print\\:break-inside-avoid {
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+  }
+  
+  /* Ensure tables don't break across pages poorly */
+  table {
+    page-break-inside: auto;
+  }
+  
+  tr {
+    page-break-inside: avoid;
+    page-break-after: auto;
+  }
+  
+  thead {
+    display: table-header-group;
+  }
+  
+  tfoot {
+    display: table-footer-group;
+  }
+  
+  /* Ensure modals/overlays print correctly */
+  .fixed {
+    position: relative !important;
+  }
+  
+  /* Remove shadows in print */
+  .shadow,
+  .shadow-lg,
+  .shadow-xl,
+  .shadow-2xl {
+    box-shadow: none !important;
+  }
+  
+  /* Make sure bg colors print */
+  .bg-gray-100 {
+    background-color: #f3f4f6 !important;
+  }
+  
+  .bg-gray-200 {
+    background-color: #e5e7eb !important;
+  }
+  
+  .bg-gray-800 {
+    background-color: #1f2937 !important;
+  }
+  
+  .bg-red-50 {
+    background-color: #fef2f2 !important;
+  }
+  
+  .bg-red-600 {
+    background-color: #dc2626 !important;
+  }
+  
+  .bg-yellow-100 {
+    background-color: #fef3c7 !important;
+  }
+  
+  /* Ensure text colors print */
+  .text-white {
+    color: white !important;
+  }
+  
+  .text-red-600 {
+    color: #dc2626 !important;
+  }
+  
+  .text-gray-700 {
+    color: #374151 !important;
+  }
+  
+  .text-gray-600 {
+    color: #4b5563 !important;
+  }
+  
+  .text-gray-500 {
+    color: #6b7280 !important;
+  }
+  
+  /* Print page settings */
+  @page {
+    size: letter portrait;
+    margin: 0.5in;
+  }
+  
+  @page :first {
+    margin-top: 0.25in;
+  }
+}

@@ -1,7 +1,8 @@
 'use client';
 
 import { useState } from 'react';
-import { trpc } from '@/lib/trpc/client';
+import { useCrewTemplates } from '../hooks/useCrewTemplates';
+import { useCrewByProject } from '../hooks/useCrew';
 
 interface CrewTemplatesProps {
   projectId: string;
@@ -9,32 +10,28 @@ interface CrewTemplatesProps {
 }
 
 export function CrewTemplates({ projectId, onClose }: CrewTemplatesProps) {
-  const { data: templates = [], isLoading } = trpc.crewTemplates.getAll.useQuery();
-  const utils = trpc.useUtils();
+  const { templates, isLoading, applyTemplate } = useCrewTemplates();
+  // We might need to re-fetch crew list to invalidate, but onSnapshot in useCrewByProject handles it automatically
   const [selectedTemplate, setSelectedTemplate] = useState<string | null>(null);
   const [skipExisting, setSkipExisting] = useState(true);
   const [overwriteExisting, setOverwriteExisting] = useState(false);
 
-  const applyTemplate = trpc.crewTemplates.applyTemplate.useMutation({
-    onSuccess: (result) => {
-      utils.crew.listByProject.invalidate({ projectId });
-      alert(`Template applied successfully! Created ${result.positionsCreated} crew positions.${result.positionsSkipped > 0 ? ` Skipped ${result.positionsSkipped} existing positions.` : ''}`);
-      onClose();
-    },
-    onError: (error) => {
-      alert(`Failed to apply template: ${error.message}`);
-    },
-  });
-
   const handleApply = async () => {
     if (!selectedTemplate) return;
 
-    await applyTemplate.mutateAsync({
-      projectId,
-      templateId: selectedTemplate,
-      skipExisting,
-      overwriteExisting,
-    });
+    try {
+        const result = await applyTemplate.mutateAsync({
+          projectId,
+          templateId: selectedTemplate,
+          skipExisting,
+          overwriteExisting,
+        });
+        
+        alert(`Template applied successfully! Created ${result.positionsCreated} crew positions.${result.positionsSkipped > 0 ? ` Skipped ${result.positionsSkipped} existing positions.` : ''}`);
+        onClose();
+    } catch (error: any) {
+        alert(`Failed to apply template: ${error.message}`);
+    }
   };
 
   const selectedTemplateData = templates.find(t => t.id === selectedTemplate);
@@ -164,11 +161,11 @@ export function CrewTemplates({ projectId, onClose }: CrewTemplatesProps) {
           </button>
           <button
             onClick={handleApply}
-            disabled={!selectedTemplate || applyTemplate.isPending}
+            disabled={!selectedTemplate || (applyTemplate as any).isPending}
             className="px-4 py-2 bg-accent-primary rounded-lg hover:bg-accent-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             style={{ color: 'rgb(var(--colored-button-text))' }}
           >
-            {applyTemplate.isPending ? 'Applying...' : 'Apply Template'}
+            {(applyTemplate as any).isPending ? 'Applying...' : 'Apply Template'}
           </button>
         </div>
       </div>

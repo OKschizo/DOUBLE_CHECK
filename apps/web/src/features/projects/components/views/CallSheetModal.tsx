@@ -1,8 +1,8 @@
 'use client';
 
-import { useMemo } from 'react';
-import { trpc } from '@/lib/trpc/client';
-import type { ShootingDay, ScheduleEvent } from '@/lib/schemas';
+import { useMemo, useRef } from 'react';
+import { useProject } from '@/features/projects/hooks/useProjects';
+import { useCallSheet } from '@/features/schedule/hooks/useCallSheet';
 
 interface CallSheetModalProps {
   projectId: string;
@@ -11,291 +11,332 @@ interface CallSheetModalProps {
   onClose: () => void;
 }
 
+/**
+ * Professional Call Sheet Generator
+ * Industry-standard format matching Celtx/Movie Magic style
+ */
 export function CallSheetModal({ projectId, shootingDayId, isOpen, onClose }: CallSheetModalProps) {
-  const { data: callSheet, isLoading, error } = trpc.schedule.getCallSheet.useQuery(
-    { shootingDayId, projectId },
-    { enabled: isOpen && !!shootingDayId }
-  );
+  const { callSheet, isLoading, error } = useCallSheet(projectId, shootingDayId);
+  const { data: project } = useProject(projectId);
+  const printRef = useRef<HTMLDivElement>(null);
 
-  const { data: project } = trpc.projects.getById.useQuery({ id: projectId });
-  const { data: projectMembers } = trpc.projectMembers.listByProject.useQuery(
-    { projectId },
-    { enabled: isOpen }
-  );
-
-  // Calculate total page count
+  // Calculate total page count (in 8ths)
   const totalPages = useMemo(() => {
-    if (!callSheet?.events) return 0;
-    return callSheet.events.reduce((total, event) => {
-      if ((event as any).pageCount) {
-        // Parse page count (e.g., "1/8", "3 4/8")
-        const match = (event as any).pageCount.match(/(\d+)\s*(\d+)?\/(\d+)/);
+    if (!callSheet?.events) return { eighths: 0, display: '0' };
+    let totalEighths = 0;
+    
+    callSheet.events.forEach((event: any) => {
+      const pageCount = event.pageCount;
+      if (pageCount) {
+        const match = pageCount.match(/^(\d+)?\s*(\d+)\/(\d+)$/);
         if (match) {
           const whole = parseInt(match[1]) || 0;
           const num = parseInt(match[2]) || 0;
           const den = parseInt(match[3]) || 8;
-          return total + (whole + num / den);
+          totalEighths += whole * 8 + Math.round(num * 8 / den);
+        } else {
+          const plain = parseInt(pageCount);
+          if (!isNaN(plain)) {
+            totalEighths += plain * 8;
+          }
         }
       }
-      return total;
-    }, 0);
+    });
+    
+    const whole = Math.floor(totalEighths / 8);
+    const remainder = totalEighths % 8;
+    const display = remainder > 0 ? `${whole > 0 ? whole + ' ' : ''}${remainder}/8` : `${whole}`;
+    
+    return { eighths: totalEighths, display };
   }, [callSheet?.events]);
 
-  // Get breakfast and lunch from break events
-  const breakfastTime = useMemo(() => {
-    if (!callSheet?.events) return '';
+  // Get meal times
+  const meals = useMemo(() => {
+    if (!callSheet) return { breakfast: '', lunch: '', dinner: '' };
+    
     const breakfastEvent = callSheet.events.find(
-      e => e.type === 'break' && e.description.toLowerCase().includes('breakfast')
+      (e: any) => e.type === 'break' && e.description?.toLowerCase().includes('breakfast')
     );
-    return breakfastEvent?.time || '';
-  }, [callSheet?.events]);
-
-  const lunchTime = useMemo(() => {
-    if (!callSheet?.events) return '';
     const lunchEvent = callSheet.events.find(
-      e => e.type === 'break' && e.description.toLowerCase().includes('lunch')
+      (e: any) => e.type === 'break' && e.description?.toLowerCase().includes('lunch')
     );
-    return lunchEvent?.time || '';
-  }, [callSheet?.events]);
+    
+    return {
+      breakfast: callSheet.shootingDay.breakfast || breakfastEvent?.time || '',
+      lunch: callSheet.shootingDay.lunch || lunchEvent?.time || '',
+    };
+  }, [callSheet]);
 
   // Get key contacts from crew
-  const director = useMemo(() => {
-    if (!callSheet?.shootingDay.directorCrewId || !callSheet?.crew) return null;
-    return callSheet.crew.find(c => c.id === callSheet.shootingDay.directorCrewId);
-  }, [callSheet?.shootingDay.directorCrewId, callSheet?.crew]);
+  const keyContacts = useMemo(() => {
+    if (!callSheet?.crew) return {};
+    
+    const findCrewByRole = (roles: string[]) => {
+      for (const role of roles) {
+        const found = callSheet.crew.find((c: any) => 
+          c.role?.toLowerCase().includes(role.toLowerCase())
+        );
+        if (found) return found;
+      }
+      return null;
+    };
+    
+    return {
+      director: findCrewByRole(['director']),
+      producer: findCrewByRole(['producer', 'ep']),
+      lineProducer: findCrewByRole(['line producer']),
+      upm: findCrewByRole(['unit production manager', 'upm']),
+      firstAD: findCrewByRole(['1st ad', 'first assistant director', '1st assistant']),
+      secondAD: findCrewByRole(['2nd ad', 'second assistant director', '2nd assistant']),
+      dop: findCrewByRole(['director of photography', 'dop', 'dp', 'cinematographer']),
+      productionCoordinator: findCrewByRole(['production coordinator', 'poc']),
+    };
+  }, [callSheet]);
 
-  const executiveProducer = useMemo(() => {
-    if (!callSheet?.shootingDay.executiveProducerCrewId || !callSheet?.crew) return null;
-    return callSheet.crew.find(c => c.id === callSheet.shootingDay.executiveProducerCrewId);
-  }, [callSheet?.shootingDay.executiveProducerCrewId, callSheet?.crew]);
+  // Get locations by ID
+  const getLocation = (locationId?: string) => {
+    if (!locationId || !callSheet?.locations) return null;
+    return callSheet.locations.find((l: any) => l.id === locationId);
+  };
 
-  const productionCoordinator = useMemo(() => {
-    if (!callSheet?.shootingDay.productionCoordinatorCrewId || !callSheet?.crew) return null;
-    return callSheet.crew.find(c => c.id === callSheet.shootingDay.productionCoordinatorCrewId);
-  }, [callSheet?.shootingDay.productionCoordinatorCrewId, callSheet?.crew]);
-
-  // Get location names from location IDs
-  const primaryLocation = useMemo(() => {
-    if (!callSheet?.shootingDay.locationId || !callSheet?.locations) return null;
-    return callSheet.locations.find(l => l.id === callSheet.shootingDay.locationId);
-  }, [callSheet?.shootingDay.locationId, callSheet?.locations]);
-
-  const basecampLocation = useMemo(() => {
-    if (!callSheet?.shootingDay.basecampLocationId || !callSheet?.locations) return null;
-    return callSheet.locations.find(l => l.id === callSheet.shootingDay.basecampLocationId);
-  }, [callSheet?.shootingDay.basecampLocationId, callSheet?.locations]);
-
-  const crewParkLocation = useMemo(() => {
-    if (!callSheet?.shootingDay.crewParkLocationId || !callSheet?.locations) return null;
-    return callSheet.locations.find(l => l.id === callSheet.shootingDay.crewParkLocationId);
-  }, [callSheet?.shootingDay.crewParkLocationId, callSheet?.locations]);
-
-  const techTrucksLocation = useMemo(() => {
-    if (!callSheet?.shootingDay.techTrucksLocationId || !callSheet?.locations) return null;
-    return callSheet.locations.find(l => l.id === callSheet.shootingDay.techTrucksLocationId);
-  }, [callSheet?.shootingDay.techTrucksLocationId, callSheet?.locations]);
-
-  const bgHoldingLocation = useMemo(() => {
-    if (!callSheet?.shootingDay.bgHoldingLocationId || !callSheet?.locations) return null;
-    return callSheet.locations.find(l => l.id === callSheet.shootingDay.bgHoldingLocationId);
-  }, [callSheet?.shootingDay.bgHoldingLocationId, callSheet?.locations]);
-
-  const bgParkingLocation = useMemo(() => {
-    if (!callSheet?.shootingDay.bgParkingLocationId || !callSheet?.locations) return null;
-    return callSheet.locations.find(l => l.id === callSheet.shootingDay.bgParkingLocationId);
-  }, [callSheet?.shootingDay.bgParkingLocationId, callSheet?.locations]);
-
-  // Get cast with call times (NO CONTACT INFO)
-  const castWithCallTimes = useMemo(() => {
+  // Get cast with call times and status
+  const castWithDetails = useMemo(() => {
     if (!callSheet?.cast) return [];
-    return callSheet.cast.map((member) => {
+    
+    return callSheet.cast.map((member: any, index: number) => {
       const memberEvents = callSheet.events.filter(
         (e: any) => e.castIds?.includes(member.id)
       );
-      const earliestEvent = memberEvents
-        .filter((e) => e.time)
-        .sort((a, b) => (a.time || '').localeCompare(b.time || ''))[0];
+      
+      const memberSceneIds = new Set<string>();
+      callSheet.scenes.forEach((scene: any) => {
+        if (scene.castMemberIds?.includes(member.id)) {
+          memberSceneIds.add(scene.id);
+        }
+      });
+      
+      const sceneEvents = callSheet.events.filter(
+        (e: any) => e.sceneId && memberSceneIds.has(e.sceneId)
+      );
+      
+      const allMemberEvents = [...memberEvents, ...sceneEvents];
+      const earliestEvent = allMemberEvents
+        .filter((e: any) => e.time)
+        .sort((a: any, b: any) => (a.time || '').localeCompare(b.time || ''))[0];
       
       return {
         ...member,
-        callTime: earliestEvent?.time || callSheet.shootingDay.callTime,
+        castNumber: index + 1,
+        callTime: member.callTime || earliestEvent?.time || callSheet.shootingDay.callTime,
+        workStatus: member.workStatus || 'W',
+        scenes: Array.from(memberSceneIds),
       };
+    }).sort((a: any, b: any) => {
+      const typeOrder: Record<string, number> = { 'lead': 0, 'supporting': 1, 'dayplayer': 2, 'background': 3 };
+      const aOrder = typeOrder[a.castType?.toLowerCase()] ?? 2;
+      const bOrder = typeOrder[b.castType?.toLowerCase()] ?? 2;
+      if (aOrder !== bOrder) return aOrder - bOrder;
+      return (a.characterName || '').localeCompare(b.characterName || '');
     });
-  }, [callSheet?.cast, callSheet?.events, callSheet?.shootingDay]);
+  }, [callSheet]);
 
-  // Get crew organized by department
+  // Separate principal cast from background
+  const principalCast = useMemo(() => {
+    return castWithDetails.filter((c: any) => c.castType?.toLowerCase() !== 'background');
+  }, [castWithDetails]);
+
+  const backgroundCast = useMemo(() => {
+    return castWithDetails.filter((c: any) => c.castType?.toLowerCase() === 'background');
+  }, [castWithDetails]);
+
+  // Get crew organized by department for the multi-column layout
   const crewByDepartment = useMemo(() => {
     if (!callSheet?.crew) return {};
-    const deptMap: Record<string, any[]> = {};
+    
+    const departments: Record<string, any[]> = {};
     
     callSheet.crew.forEach((member: any) => {
       const dept = member.department || 'other';
-      if (!deptMap[dept]) deptMap[dept] = [];
+      if (!departments[dept]) departments[dept] = [];
       
       const memberEvents = callSheet.events.filter(
         (e: any) => e.crewIds?.includes(member.id)
       );
       const earliestEvent = memberEvents
-        .filter((e) => e.time)
-        .sort((a, b) => (a.time || '').localeCompare(b.time || ''))[0];
+        .filter((e: any) => e.time)
+        .sort((a: any, b: any) => (a.time || '').localeCompare(b.time || ''))[0];
       
-      deptMap[dept].push({
+      departments[dept].push({
         ...member,
-        callTime: earliestEvent?.time || callSheet.shootingDay.callTime,
+        callTime: member.callTime || earliestEvent?.time || callSheet.shootingDay.callTime,
       });
     });
     
-    return deptMap;
-  }, [callSheet?.crew, callSheet?.events, callSheet?.shootingDay]);
-
-  // Get key production contacts
-  const keyContacts = useMemo(() => {
-    if (!projectMembers) return {};
-    const contacts: Record<string, { name: string; phone?: string }> = {};
-    
-    // Find Director, Executive Producer, Production Coordinator
-    projectMembers.forEach((member) => {
-      // This is simplified - you might want to match by role or department
-      // For now, we'll use project members as potential contacts
+    // Sort crew within each department
+    Object.keys(departments).forEach(dept => {
+      departments[dept].sort((a, b) => {
+        if (a.isDepartmentHead && !b.isDepartmentHead) return -1;
+        if (!a.isDepartmentHead && b.isDepartmentHead) return 1;
+        return (a.name || '').localeCompare(b.name || '');
+      });
     });
     
-    return contacts;
-  }, [projectMembers]);
+    return departments;
+  }, [callSheet]);
 
-  // Calculate sunrise/sunset
-  const getSunTimes = (date: Date | string | any) => {
-    let dateObj: Date;
-    if (date instanceof Date) {
-      dateObj = date;
-    } else if (typeof date === 'string') {
-      dateObj = new Date(date);
-    } else if (date?.toDate) {
-      dateObj = date.toDate();
-    } else {
-      dateObj = new Date(date);
-    }
+  // Get shooting schedule (scenes for the day)
+  const shootingSchedule = useMemo(() => {
+    if (!callSheet?.events) return [];
     
-    if (isNaN(dateObj.getTime())) {
-      return { sunrise: 'N/A', sunset: 'N/A' };
-    }
-    
-    const dayOfYear = Math.floor((dateObj.getTime() - new Date(dateObj.getFullYear(), 0, 0).getTime()) / 86400000);
-    const declination = 23.45 * Math.sin((360 * (284 + dayOfYear) / 365) * Math.PI / 180);
-    const lat = 40.7128; // Default to NYC
-    const hourAngle = Math.acos(-Math.tan(lat * Math.PI / 180) * Math.tan(declination * Math.PI / 180));
-    const sunrise = 12 - (hourAngle * 180 / Math.PI) / 15;
-    const sunset = 12 + (hourAngle * 180 / Math.PI) / 15;
-    
-    const formatSunTime = (hours: number) => {
-      const h = Math.floor(hours);
-      const m = Math.floor((hours - h) * 60);
-      const ampm = h >= 12 ? 'PM' : 'AM';
-      const displayHour = h % 12 || 12;
-      return `${displayHour}:${m.toString().padStart(2, '0')} ${ampm}`;
-    };
-    
-    return {
-      sunrise: formatSunTime(sunrise),
-      sunset: formatSunTime(sunset),
-    };
-  };
+    return callSheet.events
+      .filter((event: any) => event.type === 'scene' || event.sceneId)
+      .map((event: any) => {
+        const scene = callSheet.scenes.find((s: any) => s.id === event.sceneId);
+        const location = getLocation(event.locationId) || getLocation(scene?.locationId);
+        
+        const sceneCast = callSheet.cast.filter((c: any) => 
+          event.castIds?.includes(c.id) || scene?.castMemberIds?.includes(c.id)
+        );
+        
+        return {
+          ...event,
+          scene,
+          location,
+          sceneCast,
+          intExt: scene?.intExt || event.intExt || '',
+          dayNight: scene?.dayNight || event.dayNight || '',
+        };
+      });
+  }, [callSheet]);
 
-  if (!isOpen) return null;
-
+  // Format helpers
   const formatTime = (time?: string) => {
     if (!time) return '';
     const [hours, minutes] = time.split(':');
     const hour = parseInt(hours);
     const ampm = hour >= 12 ? 'PM' : 'AM';
     const displayHour = hour % 12 || 12;
+    return `${displayHour}:${minutes}${ampm}`;
+  };
+
+  const formatTimeLarge = (time?: string) => {
+    if (!time) return '';
+    const [hours, minutes] = time.split(':');
+    const hour = parseInt(hours);
+    const ampm = hour >= 12 ? 'AM' : 'PM';
+    const displayHour = hour % 12 || 12;
     return `${displayHour}:${minutes} ${ampm}`;
   };
 
   const formatDate = (date: Date | string | any) => {
     let dateObj: Date;
-    if (date instanceof Date) {
-      dateObj = date;
-    } else if (typeof date === 'string') {
-      dateObj = new Date(date);
-    } else if (date?.toDate) {
-      dateObj = date.toDate();
-    } else {
-      dateObj = new Date(date);
-    }
+    if (date instanceof Date) dateObj = date;
+    else if (typeof date === 'string') dateObj = new Date(date);
+    else if (date?.toDate) dateObj = date.toDate();
+    else dateObj = new Date(date);
     
-    if (isNaN(dateObj.getTime())) {
-      return 'Invalid Date';
-    }
+    if (isNaN(dateObj.getTime())) return 'Invalid Date';
     
     return dateObj.toLocaleDateString('en-US', {
       weekday: 'long',
-      year: 'numeric',
       month: 'long',
       day: 'numeric',
-    });
-  };
-
-  const formatDateShort = (date: Date | string | any) => {
-    let dateObj: Date;
-    if (date instanceof Date) {
-      dateObj = date;
-    } else if (typeof date === 'string') {
-      dateObj = new Date(date);
-    } else if (date?.toDate) {
-      dateObj = date.toDate();
-    } else {
-      dateObj = new Date(date);
-    }
-    
-    if (isNaN(dateObj.getTime())) {
-      return '';
-    }
-    
-    return dateObj.toLocaleDateString('en-US', {
-      month: 'numeric',
-      day: 'numeric',
       year: 'numeric',
     });
   };
 
-  // Calculate 8ths from page count
-  const calculateEighths = (pageCount?: string) => {
-    if (!pageCount) return '';
-    const match = pageCount.match(/(\d+)\s*(\d+)?\/(\d+)/);
-    if (match) {
-      const whole = parseInt(match[1]) || 0;
-      const num = parseInt(match[2]) || 0;
-      const den = parseInt(match[3]) || 8;
-      const totalEighths = whole * 8 + (num * 8 / den);
-      return totalEighths.toFixed(0);
-    }
-    return '';
+  const formatDeptName = (dept: string) => {
+    const names: Record<string, string> = {
+      'production': 'PRODUCTION',
+      'direction': 'ASSISTANT DIRECTORS',
+      'camera': 'CAMERA',
+      'lighting_grip': 'ELECTRIC / GRIP',
+      'lighting': 'ELECTRIC',
+      'grip': 'GRIP',
+      'sound': 'SOUND',
+      'art': 'ART DEPARTMENT',
+      'wardrobe': 'WARDROBE',
+      'makeup_hair': 'MAKE-UP',
+      'makeup': 'MAKE-UP',
+      'hair': 'HAIR',
+      'locations': 'LOCATIONS',
+      'transportation': 'TRANSPO',
+      'catering': 'CATERING',
+      'crafty': 'CRAFTY',
+      'post_production': 'POST',
+      'stunts': 'STUNTS',
+      'vfx': 'VISUAL EFFECTS',
+      'props': 'PROPERTY',
+      'continuity': 'CONTINUITY',
+      'other': 'ADDITIONAL LABOR',
+    };
+    return names[dept.toLowerCase()] || dept.replace(/_/g, ' ').toUpperCase();
+  };
+
+  const handlePrint = () => window.print();
+
+  if (!isOpen) return null;
+
+  // Define department column layout for page 2
+  const leftColumnDepts = ['production', 'direction', 'camera', 'continuity', 'sound'];
+  const middleColumnDepts = ['makeup_hair', 'wardrobe', 'art', 'props'];
+  const rightColumnDepts = ['locations', 'transportation', 'catering', 'lighting_grip', 'grip', 'vfx', 'other'];
+
+  const renderDeptSection = (deptKey: string) => {
+    const members = crewByDepartment[deptKey];
+    if (!members || members.length === 0) return null;
+    
+    return (
+      <div key={deptKey} className="mb-2">
+        <div className="bg-gray-200 font-bold text-[9px] px-1 py-0.5 border-b border-black">
+          {formatDeptName(deptKey)}
+        </div>
+        <table className="w-full text-[8px]">
+          <tbody>
+            {members.map((member: any, idx: number) => (
+              <tr key={member.id} className={idx % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
+                <td className="px-1 py-0.5 w-4">{idx + 1}</td>
+                <td className="px-1 py-0.5">{member.role || '-'}</td>
+                <td className="px-1 py-0.5">{member.name}</td>
+                <td className="px-1 py-0.5 w-12 text-right">
+                  {member.callTime && member.callTime !== callSheet?.shootingDay.callTime 
+                    ? formatTime(member.callTime) 
+                    : ''}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    );
   };
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 overflow-y-auto print:bg-white print:p-0">
-      <div className="bg-white border border-gray-300 rounded-lg w-full max-w-6xl max-h-[90vh] overflow-hidden flex flex-col my-8 print:max-w-full print:max-h-full print:my-0 print:rounded-none print:border-none print:bg-white">
+      <div className="bg-white border border-gray-300 rounded-lg w-full max-w-[8.5in] max-h-[90vh] overflow-hidden flex flex-col my-8 print:max-w-full print:max-h-full print:my-0 print:rounded-none print:border-none">
+        
         {/* Header - Non-print */}
-        <div className="flex items-center justify-between p-6 border-b border-gray-300 bg-gray-50 print:hidden">
+        <div className="flex items-center justify-between p-3 border-b border-gray-200 bg-gray-50 print:hidden">
           <div>
-            <h2 className="text-2xl font-bold text-gray-900">CALL SHEET</h2>
+            <h2 className="text-lg font-bold text-gray-900">📋 Call Sheet Generator</h2>
             {callSheet && (
-              <p className="text-sm text-gray-600 mt-1">
-                {formatDate(callSheet.shootingDay.date)}
-                {callSheet.shootingDay.dayNumber && ` • Day ${callSheet.shootingDay.dayNumber}`}
+              <p className="text-sm text-gray-600">
+                {formatDate(callSheet.shootingDay.date)} • Day {callSheet.shootingDay.dayNumber || '?'}
               </p>
             )}
           </div>
-          <button
-            onClick={onClose}
-            className="text-gray-600 hover:text-gray-900 transition-colors text-2xl font-bold w-8 h-8 flex items-center justify-center"
-          >
-            ×
-          </button>
+          <div className="flex items-center gap-2">
+            <button onClick={handlePrint} className="px-3 py-1.5 bg-blue-600 text-white rounded hover:bg-blue-700 text-sm font-medium">
+              🖨️ Print / PDF
+            </button>
+            <button onClick={onClose} className="p-1.5 text-gray-600 hover:text-gray-900 hover:bg-gray-200 rounded">
+              ✕
+            </button>
+          </div>
         </div>
 
         {/* Content */}
-        <div className="flex-1 overflow-y-auto p-8 print:p-6 bg-white">
+        <div ref={printRef} className="flex-1 overflow-y-auto bg-white print:overflow-visible">
           {isLoading ? (
             <div className="flex items-center justify-center h-64">
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
@@ -303,357 +344,303 @@ export function CallSheetModal({ projectId, shootingDayId, isOpen, onClose }: Ca
           ) : error ? (
             <div className="text-center py-12">
               <p className="text-red-600 mb-2">Error loading call sheet</p>
-              <p className="text-sm text-gray-600">{error.message || 'Unknown error occurred'}</p>
+              <p className="text-sm text-gray-600">{error.message}</p>
             </div>
           ) : callSheet ? (
-            <div className="space-y-6 print:space-y-4">
-              {/* Call Sheet Title */}
-              <div className="text-center mb-6 print:mb-4">
-                <h1 className="text-3xl font-bold text-black mb-2 print:text-2xl">{project?.title || 'CALL SHEET'}</h1>
-                {callSheet.shootingDay.dayNumber && (
-                  <p className="text-lg text-gray-700 print:text-base">
-                    Day {callSheet.shootingDay.dayNumber} of {callSheet.shootingDay.totalDays || '?'}
-                  </p>
-                )}
-              </div>
-
-              {/* Key Info Table */}
-              <table className="w-full border-collapse border border-black mb-6 print:mb-4">
-                <tbody>
-                  <tr>
-                    <td className="border border-black p-2 font-semibold bg-gray-100 w-1/4">Shoot Date</td>
-                    <td className="border border-black p-2">{formatDateShort(callSheet.shootingDay.date)}</td>
-                    <td className="border border-black p-2 font-semibold bg-gray-100 w-1/4">Crew Call</td>
-                    <td className="border border-black p-2">{callSheet.shootingDay.callTime ? formatTime(callSheet.shootingDay.callTime) : ''}</td>
-                  </tr>
-                  <tr>
-                    <td className="border border-black p-2 font-semibold bg-gray-100">Shoot Call</td>
-                    <td className="border border-black p-2">{callSheet.shootingDay.shootCall ? formatTime(callSheet.shootingDay.shootCall) : (callSheet.shootingDay.callTime ? formatTime(callSheet.shootingDay.callTime) : '')}</td>
-                    <td className="border border-black p-2 font-semibold bg-gray-100">Breakfast</td>
-                    <td className="border border-black p-2">{breakfastTime ? formatTime(breakfastTime) : ''}</td>
-                  </tr>
-                  <tr>
-                    <td className="border border-black p-2 font-semibold bg-gray-100">Lunch</td>
-                    <td className="border border-black p-2">{lunchTime ? formatTime(lunchTime) : ''}</td>
-                    <td className="border border-black p-2 font-semibold bg-gray-100">Total Pages</td>
-                    <td className="border border-black p-2">{totalPages.toFixed(1)}</td>
-                  </tr>
-                </tbody>
-              </table>
-
-              {/* Key Contacts */}
-              <table className="w-full border-collapse border border-black mb-6 print:mb-4">
-                <thead>
-                  <tr className="bg-gray-100">
-                    <th className="border border-black p-2 text-left font-semibold">Role</th>
-                    <th className="border border-black p-2 text-left font-semibold">Name</th>
-                    <th className="border border-black p-2 text-left font-semibold">Phone</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr>
-                    <td className="border border-black p-2">Director</td>
-                    <td className="border border-black p-2">{(director as any)?.name || ''}</td>
-                    <td className="border border-black p-2">{(director as any)?.phone || ''}</td>
-                  </tr>
-                  <tr>
-                    <td className="border border-black p-2">Executive Producer</td>
-                    <td className="border border-black p-2">{(executiveProducer as any)?.name || ''}</td>
-                    <td className="border border-black p-2">{(executiveProducer as any)?.phone || ''}</td>
-                  </tr>
-                  <tr>
-                    <td className="border border-black p-2">Production Coordinator</td>
-                    <td className="border border-black p-2">{(productionCoordinator as any)?.name || ''}</td>
-                    <td className="border border-black p-2">{(productionCoordinator as any)?.phone || ''}</td>
-                  </tr>
-                </tbody>
-              </table>
-
-              {/* Location Info */}
-              <table className="w-full border-collapse border border-black mb-6 print:mb-4">
-                <tbody>
-                  <tr>
-                    <td className="border border-black p-2 font-semibold bg-gray-100 w-1/4">Basecamp</td>
-                    <td className="border border-black p-2">{(basecampLocation as any)?.name || ''}</td>
-                    <td className="border border-black p-2 font-semibold bg-gray-100 w-1/4">Crew Park</td>
-                    <td className="border border-black p-2">{(crewParkLocation as any)?.name || ''}</td>
-                  </tr>
-                  <tr>
-                    <td className="border border-black p-2 font-semibold bg-gray-100">Tech Trucks</td>
-                    <td className="border border-black p-2">{(techTrucksLocation as any)?.name || ''}</td>
-                    <td className="border border-black p-2 font-semibold bg-gray-100">BG Holding</td>
-                    <td className="border border-black p-2">{(bgHoldingLocation as any)?.name || ''}</td>
-                  </tr>
-                  <tr>
-                    <td className="border border-black p-2 font-semibold bg-gray-100">BG Parking</td>
-                    <td className="border border-black p-2">{(bgParkingLocation as any)?.name || ''}</td>
-                    <td className="border border-black p-2 font-semibold bg-gray-100">Nearest Hospital</td>
-                    <td className="border border-black p-2">{callSheet.shootingDay.nearestHospital || ''}</td>
-                  </tr>
-                </tbody>
-              </table>
-
-              {/* Important Notes */}
-              {callSheet.shootingDay.notes && (
-                <div className="mb-6 print:mb-4">
-                  <h3 className="text-sm font-bold uppercase mb-2">Important Notes:</h3>
-                  <div className="border border-black p-3 bg-gray-50">
-                    <p className="text-sm whitespace-pre-wrap">{callSheet.shootingDay.notes}</p>
+            <div className="text-black text-[10px] leading-tight">
+              
+              {/* ==================== PAGE 1 ==================== */}
+              <div className="p-4 print:p-3">
+                
+                {/* Header Row */}
+                <div className="flex border-2 border-black mb-2">
+                  {/* Left: Logo + Key Contacts */}
+                  <div className="w-1/4 border-r-2 border-black p-2">
+                    <div className="text-center mb-2">
+                      <div className="text-xs font-bold">[Production</div>
+                      <div className="text-xs font-bold">Company Logo]</div>
+                    </div>
+                    <div className="text-[8px] space-y-0.5">
+                      <div><span className="font-bold">Director:</span> {keyContacts.director?.name || ''}</div>
+                      <div><span className="font-bold">Producer:</span> {keyContacts.producer?.name || ''}</div>
+                      <div><span className="font-bold">Line Producer:</span> {keyContacts.lineProducer?.name || ''}</div>
+                    </div>
                   </div>
-                </div>
-              )}
-
-              {/* Shooting Schedule Table */}
-              {callSheet.events.length > 0 && (
-                <div className="mb-6 print:mb-4">
-                  <h3 className="text-sm font-bold uppercase mb-2">Shooting Schedule</h3>
-                  <table className="w-full border-collapse border border-black text-xs">
-                    <thead>
-                      <tr className="bg-gray-100">
-                        <th className="border border-black p-1 text-left font-semibold">Sc.</th>
-                        <th className="border border-black p-1 text-left font-semibold">IIE</th>
-                        <th className="border border-black p-1 text-left font-semibold">Setting/Description</th>
-                        <th className="border border-black p-1 text-left font-semibold">DIN</th>
-                        <th className="border border-black p-1 text-left font-semibold">Pages</th>
-                        <th className="border border-black p-1 text-left font-semibold">8ths</th>
-                        <th className="border border-black p-1 text-left font-semibold">Duration</th>
-                        <th className="border border-black p-1 text-left font-semibold">Cast</th>
-                        <th className="border border-black p-1 text-left font-semibold">Location</th>
-                        <th className="border border-black p-1 text-left font-semibold">DD</th>
-                        <th className="border border-black p-1 text-left font-semibold">Unit</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {callSheet.events.map((event, idx) => {
-                        const scene = callSheet.scenes.find((s: any) => s.id === (event as any).sceneId);
-                        const shot = callSheet.shots.find((s: any) => s.id === (event as any).shotId);
-                        const eventCast = callSheet.cast.filter((c: any) => (event as any).castIds?.includes(c.id));
-                        
-                        // Get location - prefer event locationId, then scene locationId, then event.location text
-                        const eventLocationId = (event as any).locationId || (scene as any)?.locationId;
-                        const location = eventLocationId 
-                          ? callSheet.locations.find((l: any) => l.id === eventLocationId)
-                          : null;
-                        
-                        // Get page count - prefer event pageCount, then scene pageCount
-                        const pageCount = (event as any).pageCount || (scene as any)?.pageCount || '';
-                        
-                        // Get description - prefer event description, then scene title/description
-                        const description = (event as any).description || (scene as any)?.title || (scene as any)?.description || '';
-                        
-                        // Format duration
-                        const duration = (event as any).duration ? `${(event as any).duration}` : '';
-                        
-                        return (
-                          <tr key={event.id}>
-                            <td className="border border-black p-1">{(scene as any)?.sceneNumber || (event as any).sceneNumber || ''}</td>
-                            <td className="border border-black p-1"></td>
-                            <td className="border border-black p-1">{description}</td>
-                            <td className="border border-black p-1"></td>
-                            <td className="border border-black p-1">{pageCount}</td>
-                            <td className="border border-black p-1">{calculateEighths(pageCount)}</td>
-                            <td className="border border-black p-1">{duration}</td>
-                            <td className="border border-black p-1">
-                              {eventCast.map(c => c.characterName || c.name).filter(Boolean).join(', ')}
-                            </td>
-                            <td className="border border-black p-1">{(location as any)?.name || (event as any).location || (scene as any)?.locationName || ''}</td>
-                            <td className="border border-black p-1"></td>
-                            <td className="border border-black p-1"></td>
-                          </tr>
-                        );
-                      })}
-                      <tr>
-                        <td colSpan={11} className="border border-black p-1 font-semibold bg-gray-100">
-                          End of Day #{callSheet.shootingDay.dayNumber || ''}
-                        </td>
-                      </tr>
-                    </tbody>
-                  </table>
-                </div>
-              )}
-
-              {/* Cast Table */}
-              {castWithCallTimes.length > 0 && (
-                <div className="mb-6 print:mb-4">
-                  <h3 className="text-sm font-bold uppercase mb-2">Cast</h3>
-                  <table className="w-full border-collapse border border-black text-xs">
-                    <thead>
-                      <tr className="bg-gray-100">
-                        <th className="border border-black p-1 text-left font-semibold">#</th>
-                        <th className="border border-black p-1 text-left font-semibold">Character</th>
-                        <th className="border border-black p-1 text-left font-semibold">Artist</th>
-                        <th className="border border-black p-1 text-left font-semibold">SWF</th>
-                        <th className="border border-black p-1 text-left font-semibold">PU</th>
-                        <th className="border border-black p-1 text-left font-semibold">H/M/W</th>
-                        <th className="border border-black p-1 text-left font-semibold">Block</th>
-                        <th className="border border-black p-1 text-left font-semibold">Set Call</th>
-                        <th className="border border-black p-1 text-left font-semibold">Special Instructions, Misc.</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {castWithCallTimes.map((member, idx) => (
-                        <tr key={member.id}>
-                          <td className="border border-black p-1">{idx + 1}</td>
-                          <td className="border border-black p-1 font-semibold">{(member as any).characterName || ''}</td>
-                          <td className="border border-black p-1">{(member as any).actorName || (member as any).name || ''}</td>
-                          <td className="border border-black p-1"></td>
-                          <td className="border border-black p-1"></td>
-                          <td className="border border-black p-1"></td>
-                          <td className="border border-black p-1"></td>
-                          <td className="border border-black p-1">{(member as any).callTime ? formatTime((member as any).callTime) : ''}</td>
-                          <td className="border border-black p-1">{(member as any).notes || ''}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-
-              {/* Transport Notes */}
-              <div className="mb-6 print:mb-4">
-                <h3 className="text-sm font-bold uppercase mb-2">Transport Notes</h3>
-                <div className="border border-black p-3 bg-gray-50 min-h-[60px]">
-                  <p className="text-sm"></p>
-                </div>
-              </div>
-
-              {/* Departmental Notes */}
-              <div className="mb-6 print:mb-4">
-                <h3 className="text-sm font-bold uppercase mb-2">Departmental Notes</h3>
-                <div className="grid grid-cols-3 gap-4">
-                  {Object.entries(crewByDepartment).map(([dept, members]) => (
-                    <div key={dept} className="border border-black p-2">
-                      <div className="font-semibold text-xs mb-1 uppercase">{dept.replace(/_/g, ' ')}</div>
-                      <div className="text-xs space-y-1">
-                        {members.map((member) => (
-                          <div key={member.id}>
-                            <span className="font-semibold">{member.name}</span>
-                            {member.role && <span className="text-gray-600"> - {member.role}</span>}
-                            {member.callTime && member.callTime !== callSheet.shootingDay.callTime && (
-                              <span className="text-gray-600"> ({formatTime(member.callTime)})</span>
-                            )}
-                          </div>
-                        ))}
+                  
+                  {/* Center: Title + Crew Call */}
+                  <div className="w-1/2 border-r-2 border-black">
+                    <div className="text-center border-b border-black p-1">
+                      <div className="text-lg font-bold">{project?.name || '[Title]'}</div>
+                    </div>
+                    <div className="flex">
+                      <div className="flex-1 text-center p-2 border-r border-black">
+                        <div className="text-[8px] font-bold">Call Sheet</div>
+                        <div className="text-[8px]">GENERAL CREW CALL</div>
+                        <div className="text-3xl font-bold text-black mt-1">
+                          {formatTimeLarge(callSheet.shootingDay.callTime) || '—:— AM'}
+                        </div>
+                      </div>
+                      <div className="w-1/3 p-1 text-[8px]">
+                        <div className="flex justify-between"><span>Courtesy Breakfast</span><span>{formatTime(meals.breakfast) || ''}</span></div>
+                        <div className="flex justify-between"><span>Shooting Call</span><span>{formatTime(callSheet.shootingDay.shootCall) || ''}</span></div>
+                        <div className="flex justify-between"><span>Lunch</span><span>{formatTime(meals.lunch) || ''}</span></div>
                       </div>
                     </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* Crew Breakdown by Department */}
-              {Object.keys(crewByDepartment).length > 0 && (
-                <div className="mb-6 print:mb-4">
-                  <h3 className="text-sm font-bold uppercase mb-2">Crew</h3>
-                  <div className="space-y-4">
-                    {Object.entries(crewByDepartment).map(([department, members]) => {
-                      // Sort members - department heads first
-                      const sortedMembers = [...members].sort((a, b) => {
-                        return a.name.localeCompare(b.name);
-                      });
-                      
-                      return (
-                        <div key={department} className="border border-black">
-                          <div className="bg-gray-100 border-b border-black p-2 font-semibold text-sm uppercase">
-                            {department.replace(/_/g, ' ')}
-                          </div>
-                          <table className="w-full border-collapse text-xs">
-                            <thead>
-                              <tr className="bg-gray-50">
-                                <th className="border border-black p-1 text-left font-semibold">Name</th>
-                                <th className="border border-black p-1 text-left font-semibold">Role</th>
-                                <th className="border border-black p-1 text-left font-semibold">Call Time</th>
-                                <th className="border border-black p-1 text-left font-semibold">Phone</th>
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {sortedMembers.map((member) => (
-                                <tr key={member.id}>
-                                  <td className="border border-black p-1">{member.name}</td>
-                                  <td className="border border-black p-1">{member.role || ''}</td>
-                                  <td className="border border-black p-1">{member.callTime ? formatTime(member.callTime) : ''}</td>
-                                  <td className="border border-black p-1">{member.phone || ''}</td>
-                                </tr>
-                              ))}
-                            </tbody>
-                          </table>
-                        </div>
-                      );
-                    })}
+                    <div className="flex border-t border-black text-[8px]">
+                      <div className="flex-1 p-1 border-r border-black text-center">
+                        <div className="font-bold">NEAREST HOSPITAL</div>
+                        <div>{callSheet.shootingDay.nearestHospital || 'TBD'}</div>
+                      </div>
+                      <div className="flex-1 p-1 border-r border-black text-center">
+                        <div className="font-bold">CREW PARKING</div>
+                        <div>{getLocation(callSheet.shootingDay.crewParkLocationId)?.name || 'TBD'}</div>
+                      </div>
+                      <div className="flex-1 p-1 text-center">
+                        <div className="font-bold">BASECAMP</div>
+                        <div>{getLocation(callSheet.shootingDay.basecampLocationId)?.name || 'TBD'}</div>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  {/* Right: Date + Weather */}
+                  <div className="w-1/4 text-[9px]">
+                    <div className="text-center border-b border-black p-1">
+                      <div className="font-bold">{formatDate(callSheet.shootingDay.date)}</div>
+                      <div className="text-sm font-bold">Day {callSheet.shootingDay.dayNumber || '?'} of {callSheet.shootingDay.totalDays || '?'}</div>
+                    </div>
+                    <div className="p-1 text-[8px]">
+                      <div className="font-bold mb-1">WEATHER</div>
+                      <div className="flex justify-between"><span>High</span><span>{callSheet.weather?.high || '—°'}</span></div>
+                      <div className="flex justify-between"><span>Low</span><span>{callSheet.weather?.low || '—°'}</span></div>
+                      <div className="flex justify-between"><span>Sunrise</span><span>{callSheet.weather?.sunrise || ''}</span></div>
+                      <div className="flex justify-between"><span>Sunset</span><span>{callSheet.weather?.sunset || ''}</span></div>
+                    </div>
                   </div>
                 </div>
-              )}
 
-              {/* Key Contacts Footer */}
-              {(() => {
-                // Find key crew members
-                const firstAD = callSheet.crew.find(c => c.role === '1st AD' || c.role?.includes('1st AD'));
-                const secondAD = callSheet.crew.find(c => c.role === '2nd AD' || c.role?.includes('2nd AD'));
-                const dop = callSheet.crew.find(c => c.role === 'Director of Photography' || c.role === 'DOP' || c.role?.includes('Director of Photography'));
-                const transportCaptain = callSheet.crew.find(c => 
-                  c.role === 'Transport Captain' || 
-                  c.role === 'Transportation Coordinator' ||
-                  c.role?.includes('Transport Captain') ||
-                  c.role?.includes('Transportation Coordinator')
-                );
-                
-                const formatContact = (name?: string, phone?: string) => {
-                  if (!name && !phone) return '';
-                  return `${name || ''}${name && phone ? '\n' : ''}${phone || ''}`;
-                };
-                
-                return (
-                  <div className="mt-6 print:mt-4">
-                    <table className="w-full border-collapse border border-black text-xs">
+                {/* Safety Banner */}
+                <div className="bg-yellow-100 border border-black text-center py-1 text-[8px] font-bold mb-2">
+                  SAFETY FIRST | NO FORCED CALLS WITHOUT PRIOR APPROVAL OF UPM | NO SMOKING ON SET | NO VISITORS WITHOUT PRIOR APPROVAL OF PRODUCER
+                </div>
+
+                {/* Scenes Table */}
+                {shootingSchedule.length > 0 && (
+                  <div className="border border-black mb-2">
+                    <table className="w-full border-collapse text-[9px]">
                       <thead>
-                        <tr className="bg-gray-100">
-                          <th className="border border-black p-1 text-left font-semibold">Director</th>
-                          <th className="border border-black p-1 text-left font-semibold">1st AD</th>
-                          <th className="border border-black p-1 text-left font-semibold">DOP</th>
-                          <th className="border border-black p-1 text-left font-semibold">2nd AD</th>
-                          <th className="border border-black p-1 text-left font-semibold">Transport Captain</th>
-                          <th className="border border-black p-1 text-left font-semibold">Production Coordinator</th>
+                        <tr className="bg-gray-200">
+                          <th className="border border-black p-1 text-left w-12">SCENES</th>
+                          <th className="border border-black p-1 text-left w-12">PAGES</th>
+                          <th className="border border-black p-1 text-left">SET &amp; DESCRIPTION</th>
+                          <th className="border border-black p-1 text-left w-8">D/N</th>
+                          <th className="border border-black p-1 text-left w-24">CAST</th>
+                          <th className="border border-black p-1 text-left">NOTES</th>
+                          <th className="border border-black p-1 text-left">LOCATIONS</th>
                         </tr>
                       </thead>
                       <tbody>
-                        <tr>
-                          <td className="border border-black p-1 whitespace-pre-line">{formatContact(director?.name, director?.phone)}</td>
-                          <td className="border border-black p-1 whitespace-pre-line">{formatContact(firstAD?.name, firstAD?.phone)}</td>
-                          <td className="border border-black p-1 whitespace-pre-line">{formatContact(dop?.name, dop?.phone)}</td>
-                          <td className="border border-black p-1 whitespace-pre-line">{formatContact(secondAD?.name, secondAD?.phone)}</td>
-                          <td className="border border-black p-1 whitespace-pre-line">{formatContact(transportCaptain?.name, transportCaptain?.phone)}</td>
-                          <td className="border border-black p-1 whitespace-pre-line">{formatContact(productionCoordinator?.name, productionCoordinator?.phone)}</td>
+                        {shootingSchedule.map((item: any, idx: number) => (
+                          <tr key={item.id} className={idx % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
+                            <td className="border border-black p-1 font-bold">
+                              {item.scene?.sceneNumber || item.sceneNumber || '-'}
+                            </td>
+                            <td className="border border-black p-1">
+                              {item.pageCount || item.scene?.pageCount || '-'}
+                            </td>
+                            <td className="border border-black p-1">
+                              <span className="font-semibold">{item.intExt?.toUpperCase()}. </span>
+                              {item.scene?.settingName || ''} - {item.description || item.scene?.title || ''}
+                            </td>
+                            <td className="border border-black p-1 text-center">
+                              {item.dayNight?.charAt(0).toUpperCase() || '-'}
+                            </td>
+                            <td className="border border-black p-1">
+                              {item.sceneCast?.map((c: any) => {
+                                const castNum = principalCast.findIndex((cd: any) => cd.id === c.id) + 1;
+                                return castNum > 0 ? castNum : null;
+                              }).filter(Boolean).join(', ') || '-'}
+                              {item.sceneCast?.some((c: any) => c.castType?.toLowerCase() === 'background') && ', BG'}
+                            </td>
+                            <td className="border border-black p-1">{item.notes || ''}</td>
+                            <td className="border border-black p-1">{item.location?.name || item.location || ''}</td>
+                          </tr>
+                        ))}
+                        <tr className="bg-gray-200 font-bold">
+                          <td className="border border-black p-1">TOTAL PAGES</td>
+                          <td className="border border-black p-1">{totalPages.display}</td>
+                          <td colSpan={5} className="border border-black p-1"></td>
                         </tr>
                       </tbody>
                     </table>
                   </div>
-                );
-              })()}
-            </div>
-          ) : !callSheet ? (
-            <div className="text-center py-12">
-              <p className="text-gray-600">Unable to load call sheet data</p>
-              {error && (
-                <p className="text-sm text-red-600 mt-2">{error.message}</p>
-              )}
-            </div>
-          ) : null}
-        </div>
+                )}
 
-        {/* Footer */}
-        <div className="flex justify-end gap-3 p-6 border-t border-gray-300 bg-gray-50 print:hidden">
-          <button
-            onClick={onClose}
-            className="px-4 py-2 bg-gray-200 text-gray-900 rounded-lg hover:bg-gray-300 transition-colors"
-          >
-            Close
-          </button>
-          <button
-            onClick={() => window.print()}
-            className="px-4 py-2 bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors font-medium"
-            style={{ color: 'rgb(var(--colored-button-text))' }}
-          >
-            Print
-          </button>
+                {/* Cast Table */}
+                {principalCast.length > 0 && (
+                  <div className="border border-black mb-2">
+                    <table className="w-full border-collapse text-[9px]">
+                      <thead>
+                        <tr className="bg-gray-200">
+                          <th className="border border-black p-1 text-left w-6">ID</th>
+                          <th className="border border-black p-1 text-left">CHARACTER</th>
+                          <th className="border border-black p-1 text-left">CAST</th>
+                          <th className="border border-black p-1 text-left w-10">STATUS</th>
+                          <th className="border border-black p-1 text-left w-14">PICKUP</th>
+                          <th className="border border-black p-1 text-left w-14">CALL</th>
+                          <th className="border border-black p-1 text-left w-14">BLK/REH</th>
+                          <th className="border border-black p-1 text-left w-14">SET</th>
+                          <th className="border border-black p-1 text-left">SPECIAL INSTRUCTIONS</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {principalCast.map((member: any, idx: number) => (
+                          <tr key={member.id} className={idx % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
+                            <td className="border border-black p-1 font-bold">{idx + 1}</td>
+                            <td className="border border-black p-1 font-semibold">{member.characterName || '-'}</td>
+                            <td className="border border-black p-1">{member.actorName || member.name || '-'}</td>
+                            <td className="border border-black p-1">{member.workStatus || 'W'}</td>
+                            <td className="border border-black p-1">{member.pickupTime ? formatTime(member.pickupTime) : ''}</td>
+                            <td className="border border-black p-1 font-semibold">{formatTime(member.callTime)}</td>
+                            <td className="border border-black p-1">{member.blockTime ? formatTime(member.blockTime) : ''}</td>
+                            <td className="border border-black p-1">{member.setTime ? formatTime(member.setTime) : ''}</td>
+                            <td className="border border-black p-1">{member.notes || member.specialInstructions || ''}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+
+                {/* Background Table */}
+                {backgroundCast.length > 0 && (
+                  <div className="border border-black mb-2">
+                    <div className="bg-yellow-100 font-bold text-[9px] p-1 border-b border-black">
+                      BACKGROUND / EXTRAS
+                    </div>
+                    <table className="w-full border-collapse text-[9px]">
+                      <thead>
+                        <tr className="bg-gray-100">
+                          <th className="border border-black p-1 text-left w-10">QTY</th>
+                          <th className="border border-black p-1 text-left">BACKGROUND</th>
+                          <th className="border border-black p-1 text-left w-14">CALL</th>
+                          <th className="border border-black p-1 text-left">SPECIAL INSTRUCTIONS BY DEPARTMENT</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {backgroundCast.map((member: any, idx: number) => (
+                          <tr key={member.id} className={idx % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
+                            <td className="border border-black p-1">{member.quantity || 1}</td>
+                            <td className="border border-black p-1">{member.characterName || member.description || '-'}</td>
+                            <td className="border border-black p-1">{formatTime(member.callTime)}</td>
+                            <td className="border border-black p-1">{member.notes || ''}</td>
+                          </tr>
+                        ))}
+                        <tr className="bg-gray-200 font-bold">
+                          <td className="border border-black p-1">
+                            {backgroundCast.reduce((sum: number, c: any) => sum + (c.quantity || 1), 0)}
+                          </td>
+                          <td colSpan={3} className="border border-black p-1">TOTAL STANDINGS / BACKGROUND</td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+
+                {/* Important Notes */}
+                {callSheet.shootingDay.notes && (
+                  <div className="border border-black mb-2 p-2">
+                    <div className="font-bold text-[9px] mb-1">PRODUCTION NOTES:</div>
+                    <div className="text-[9px] whitespace-pre-wrap">{callSheet.shootingDay.notes}</div>
+                  </div>
+                )}
+              </div>
+
+              {/* ==================== PAGE 2: CREW ==================== */}
+              <div className="page-break-before print:break-before-page p-4 print:p-3">
+                <div className="flex justify-between items-center border-b-2 border-black pb-1 mb-2">
+                  <div className="font-bold text-sm">{project?.name || '[Title]'}</div>
+                  <div className="font-bold">Day {callSheet.shootingDay.dayNumber || '?'} of {callSheet.shootingDay.totalDays || '?'}</div>
+                </div>
+                
+                {/* Crew Grid - 3 columns */}
+                <div className="flex gap-2">
+                  {/* Left Column */}
+                  <div className="w-1/3 border border-black">
+                    <div className="grid grid-cols-4 text-[8px] bg-gray-800 text-white font-bold">
+                      <div className="p-0.5 border-r border-gray-600">#</div>
+                      <div className="p-0.5 border-r border-gray-600">TITLE</div>
+                      <div className="p-0.5 border-r border-gray-600">NAME</div>
+                      <div className="p-0.5">CALL</div>
+                    </div>
+                    {leftColumnDepts.map(dept => renderDeptSection(dept))}
+                  </div>
+                  
+                  {/* Middle Column */}
+                  <div className="w-1/3 border border-black">
+                    <div className="grid grid-cols-4 text-[8px] bg-gray-800 text-white font-bold">
+                      <div className="p-0.5 border-r border-gray-600">#</div>
+                      <div className="p-0.5 border-r border-gray-600">TITLE</div>
+                      <div className="p-0.5 border-r border-gray-600">NAME</div>
+                      <div className="p-0.5">CALL</div>
+                    </div>
+                    {middleColumnDepts.map(dept => renderDeptSection(dept))}
+                    
+                    {/* Special Equipment */}
+                    {callSheet.equipment.length > 0 && (
+                      <div className="mb-2">
+                        <div className="bg-gray-200 font-bold text-[9px] px-1 py-0.5 border-b border-black">
+                          SPECIAL EQUIPMENT
+                        </div>
+                        <div className="text-[8px] p-1">
+                          {callSheet.equipment.map((item: any) => (
+                            <div key={item.id}>{item.name} {item.quantity > 1 ? `(x${item.quantity})` : ''}</div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                  
+                  {/* Right Column */}
+                  <div className="w-1/3 border border-black">
+                    <div className="grid grid-cols-4 text-[8px] bg-gray-800 text-white font-bold">
+                      <div className="p-0.5 border-r border-gray-600">#</div>
+                      <div className="p-0.5 border-r border-gray-600">TITLE</div>
+                      <div className="p-0.5 border-r border-gray-600">NAME</div>
+                      <div className="p-0.5">CALL</div>
+                    </div>
+                    {rightColumnDepts.map(dept => renderDeptSection(dept))}
+                    
+                    {/* Meal Info */}
+                    <div className="mb-2">
+                      <div className="bg-gray-200 font-bold text-[9px] px-1 py-0.5 border-b border-black">
+                        CATERING
+                      </div>
+                      <div className="text-[8px] p-1">
+                        {meals.breakfast && <div>Courtesy Breakfast: {formatTime(meals.breakfast)}</div>}
+                        {meals.lunch && <div>Crew Lunch: {formatTime(meals.lunch)}</div>}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Walkie Channels Footer */}
+                <div className="mt-2 border-t border-black pt-1 text-[8px] text-center">
+                  Walkie Channels: 1-Production 2-Open 3-Open 4-Art 5-Open 6-Camera 7-Electric 8-Grip
+                </div>
+              </div>
+
+              {/* Footer */}
+              <div className="text-center text-[8px] text-gray-500 p-2 border-t border-gray-300">
+                Generated by DoubleCheck • {new Date().toLocaleDateString()}
+              </div>
+
+            </div>
+          ) : (
+            <div className="text-center py-12">
+              <p className="text-gray-600">No data available for this shooting day.</p>
+              <p className="text-sm text-gray-500 mt-2">Make sure you have scenes, cast, and crew scheduled.</p>
+            </div>
+          )}
         </div>
       </div>
     </div>

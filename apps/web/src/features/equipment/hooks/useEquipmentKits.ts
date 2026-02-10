@@ -1,6 +1,6 @@
 'use client';
 
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useState, useEffect, useCallback } from 'react';
 import {
   collection,
   doc,
@@ -12,50 +12,75 @@ import {
   where,
   writeBatch,
   serverTimestamp,
-  Timestamp,
+  onSnapshot,
 } from 'firebase/firestore';
 import { db } from '@/lib/firebase/config';
 import { useAuth } from '@/features/auth/hooks/useAuth';
-import type { EquipmentPackage, Equipment } from '@/lib/schemas/equipment';
+import type { EquipmentPackage } from '@/lib/schemas/equipment';
 
 // Fetch all kits for a project
 export function useEquipmentKits(projectId: string) {
-  return useQuery({
-    queryKey: ['equipment-kits', projectId],
-    queryFn: async () => {
-      const kitsRef = collection(db, 'projects', projectId, 'equipmentKits');
-      const snapshot = await getDocs(kitsRef);
-      return snapshot.docs.map((doc) => ({
-        id: doc.id,
-        ...doc.data(),
-        createdAt: doc.data().createdAt?.toDate?.() || new Date(),
-        updatedAt: doc.data().updatedAt?.toDate?.() || new Date(),
-        reservedDate: doc.data().reservedDate?.toDate?.(),
-        pickupDate: doc.data().pickupDate?.toDate?.(),
-        pickedUpDate: doc.data().pickedUpDate?.toDate?.(),
-        returnDate: doc.data().returnDate?.toDate?.(),
-        returnedDate: doc.data().returnedDate?.toDate?.(),
-      })) as EquipmentPackage[];
-    },
-    enabled: !!projectId,
-  });
+  const [kits, setKits] = useState<EquipmentPackage[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<Error | null>(null);
+
+  useEffect(() => {
+    if (!projectId) {
+      setKits([]);
+      setIsLoading(false);
+      return;
+    }
+
+    const kitsRef = collection(db, 'projects', projectId, 'equipmentKits');
+    
+    const unsubscribe = onSnapshot(kitsRef,
+      (snapshot) => {
+        const list = snapshot.docs.map((doc) => ({
+          id: doc.id,
+          ...doc.data(),
+          createdAt: doc.data().createdAt?.toDate?.() || new Date(),
+          updatedAt: doc.data().updatedAt?.toDate?.() || new Date(),
+          reservedDate: doc.data().reservedDate?.toDate?.(),
+          pickupDate: doc.data().pickupDate?.toDate?.(),
+          pickedUpDate: doc.data().pickedUpDate?.toDate?.(),
+          returnDate: doc.data().returnDate?.toDate?.(),
+          returnedDate: doc.data().returnedDate?.toDate?.(),
+        })) as EquipmentPackage[];
+        setKits(list);
+        setIsLoading(false);
+      },
+      (err) => {
+        console.error('Error fetching kits:', err);
+        setError(err);
+        setIsLoading(false);
+      }
+    );
+
+    return () => unsubscribe();
+  }, [projectId]);
+
+  return { data: kits, isLoading, error };
 }
 
 // Create a new kit
 export function useCreateKit(projectId: string) {
-  const queryClient = useQueryClient();
-  const { user } = useAuth();
+  const { firebaseUser } = useAuth();
+  const [isPending, setIsPending] = useState(false);
 
-  return useMutation({
-    mutationFn: async (data: Partial<EquipmentPackage>) => {
-      if (!user) throw new Error('Must be logged in');
+  const mutate = useCallback(async (
+    data: Partial<EquipmentPackage>,
+    options?: { onSuccess?: (id: string) => void; onError?: (err: Error) => void }
+  ) => {
+    if (!firebaseUser) throw new Error('Must be logged in');
+    setIsPending(true);
 
+    try {
       const kitsRef = collection(db, 'projects', projectId, 'equipmentKits');
       const docRef = await addDoc(kitsRef, {
         ...data,
         projectId,
         equipmentIds: data.equipmentIds || [],
-        createdBy: user.uid,
+        createdBy: firebaseUser.uid,
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
       });
@@ -64,27 +89,36 @@ export function useCreateKit(projectId: string) {
       if (data.equipmentIds && data.equipmentIds.length > 0) {
         const batch = writeBatch(db);
         for (const equipmentId of data.equipmentIds) {
-          const equipmentRef = doc(db, 'projects', projectId, 'equipment', equipmentId);
+          const equipmentRef = doc(db, 'equipment', equipmentId);
           batch.update(equipmentRef, { packageId: docRef.id, updatedAt: serverTimestamp() });
         }
         await batch.commit();
       }
 
+      setIsPending(false);
+      options?.onSuccess?.(docRef.id);
       return docRef.id;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['equipment-kits', projectId] });
-      queryClient.invalidateQueries({ queryKey: ['equipment', projectId] });
-    },
-  });
+    } catch (err: any) {
+      setIsPending(false);
+      options?.onError?.(err);
+      throw err;
+    }
+  }, [projectId, firebaseUser]);
+
+  return { mutate, isPending };
 }
 
 // Update a kit
 export function useUpdateKit(projectId: string) {
-  const queryClient = useQueryClient();
+  const [isPending, setIsPending] = useState(false);
 
-  return useMutation({
-    mutationFn: async ({ kitId, data }: { kitId: string; data: Partial<EquipmentPackage> }) => {
+  const mutate = useCallback(async (
+    { kitId, data }: { kitId: string; data: Partial<EquipmentPackage> },
+    options?: { onSuccess?: () => void; onError?: (err: Error) => void }
+  ) => {
+    setIsPending(true);
+
+    try {
       const kitRef = doc(db, 'projects', projectId, 'equipmentKits', kitId);
       
       // Clean up undefined values
@@ -99,21 +133,32 @@ export function useUpdateKit(projectId: string) {
         ...cleanData,
         updatedAt: serverTimestamp(),
       });
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['equipment-kits', projectId] });
-    },
-  });
+
+      setIsPending(false);
+      options?.onSuccess?.();
+    } catch (err: any) {
+      setIsPending(false);
+      options?.onError?.(err);
+      throw err;
+    }
+  }, [projectId]);
+
+  return { mutate, isPending };
 }
 
 // Delete a kit
 export function useDeleteKit(projectId: string) {
-  const queryClient = useQueryClient();
+  const [isPending, setIsPending] = useState(false);
 
-  return useMutation({
-    mutationFn: async (kitId: string) => {
+  const mutate = useCallback(async (
+    kitId: string,
+    options?: { onSuccess?: () => void; onError?: (err: Error) => void }
+  ) => {
+    setIsPending(true);
+
+    try {
       // First, remove packageId from all equipment in this kit
-      const equipmentRef = collection(db, 'projects', projectId, 'equipment');
+      const equipmentRef = collection(db, 'equipment');
       const q = query(equipmentRef, where('packageId', '==', kitId));
       const snapshot = await getDocs(q);
       
@@ -127,63 +172,80 @@ export function useDeleteKit(projectId: string) {
       batch.delete(kitRef);
       
       await batch.commit();
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['equipment-kits', projectId] });
-      queryClient.invalidateQueries({ queryKey: ['equipment', projectId] });
-    },
-  });
+      setIsPending(false);
+      options?.onSuccess?.();
+    } catch (err: any) {
+      setIsPending(false);
+      options?.onError?.(err);
+      throw err;
+    }
+  }, [projectId]);
+
+  return { mutate, isPending };
 }
 
 // Add equipment to a kit
 export function useAddToKit(projectId: string) {
-  const queryClient = useQueryClient();
+  const [isPending, setIsPending] = useState(false);
 
-  return useMutation({
-    mutationFn: async ({ kitId, equipmentIds }: { kitId: string; equipmentIds: string[] }) => {
-      const kitRef = doc(db, 'projects', projectId, 'equipmentKits', kitId);
-      
-      // Get current kit data to append equipment
+  const mutate = useCallback(async (
+    { kitId, equipmentIds }: { kitId: string; equipmentIds: string[] },
+    options?: { onSuccess?: () => void; onError?: (err: Error) => void }
+  ) => {
+    setIsPending(true);
+
+    try {
       const batch = writeBatch(db);
       
       // Update each equipment item with the kit ID
       for (const equipmentId of equipmentIds) {
-        const equipmentRef = doc(db, 'projects', projectId, 'equipment', equipmentId);
+        const equipmentRef = doc(db, 'equipment', equipmentId);
         batch.update(equipmentRef, { packageId: kitId, updatedAt: serverTimestamp() });
       }
       
       await batch.commit();
       
-      // Update the kit's equipmentIds array (fetch current and merge)
+      // Update the kit's equipmentIds array
       const kitsRef = collection(db, 'projects', projectId, 'equipmentKits');
       const kitDoc = await getDocs(query(kitsRef));
       const currentKit = kitDoc.docs.find(d => d.id === kitId);
       const currentIds = currentKit?.data()?.equipmentIds || [];
       const newIds = [...new Set([...currentIds, ...equipmentIds])];
       
+      const kitRef = doc(db, 'projects', projectId, 'equipmentKits', kitId);
       await updateDoc(kitRef, {
         equipmentIds: newIds,
         updatedAt: serverTimestamp(),
       });
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['equipment-kits', projectId] });
-      queryClient.invalidateQueries({ queryKey: ['equipment', projectId] });
-    },
-  });
+
+      setIsPending(false);
+      options?.onSuccess?.();
+    } catch (err: any) {
+      setIsPending(false);
+      options?.onError?.(err);
+      throw err;
+    }
+  }, [projectId]);
+
+  return { mutate, isPending };
 }
 
 // Remove equipment from a kit
 export function useRemoveFromKit(projectId: string) {
-  const queryClient = useQueryClient();
+  const [isPending, setIsPending] = useState(false);
 
-  return useMutation({
-    mutationFn: async ({ kitId, equipmentIds }: { kitId: string; equipmentIds: string[] }) => {
+  const mutate = useCallback(async (
+    { kitId, equipmentIds }: { kitId: string; equipmentIds: string[] },
+    options?: { onSuccess?: () => void; onError?: (err: Error) => void }
+  ) => {
+    setIsPending(true);
+
+    try {
       const batch = writeBatch(db);
       
       // Remove packageId from equipment items
       for (const equipmentId of equipmentIds) {
-        const equipmentRef = doc(db, 'projects', projectId, 'equipment', equipmentId);
+        const equipmentRef = doc(db, 'equipment', equipmentId);
         batch.update(equipmentRef, { packageId: null, updatedAt: serverTimestamp() });
       }
       
@@ -201,21 +263,26 @@ export function useRemoveFromKit(projectId: string) {
         equipmentIds: newIds,
         updatedAt: serverTimestamp(),
       });
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['equipment-kits', projectId] });
-      queryClient.invalidateQueries({ queryKey: ['equipment', projectId] });
-    },
-  });
+
+      setIsPending(false);
+      options?.onSuccess?.();
+    } catch (err: any) {
+      setIsPending(false);
+      options?.onError?.(err);
+      throw err;
+    }
+  }, [projectId]);
+
+  return { mutate, isPending };
 }
 
 // Create kit from template
 export function useCreateKitFromTemplate(projectId: string) {
-  const queryClient = useQueryClient();
-  const { user } = useAuth();
+  const { firebaseUser } = useAuth();
+  const [isPending, setIsPending] = useState(false);
 
-  return useMutation({
-    mutationFn: async ({
+  const mutate = useCallback(async (
+    {
       templateId,
       kitName,
       items,
@@ -223,15 +290,19 @@ export function useCreateKitFromTemplate(projectId: string) {
       templateId: string;
       kitName: string;
       items: Array<{ name: string; category: string; required?: boolean }>;
-    }) => {
-      if (!user) throw new Error('Must be logged in');
+    },
+    options?: { onSuccess?: (result: { kitId: string; itemsCreated: number }) => void; onError?: (err: Error) => void }
+  ) => {
+    if (!firebaseUser) throw new Error('Must be logged in');
+    setIsPending(true);
 
+    try {
       const batch = writeBatch(db);
       const equipmentIds: string[] = [];
 
       // Create equipment items first
       for (const item of items) {
-        const equipmentRef = doc(collection(db, 'projects', projectId, 'equipment'));
+        const equipmentRef = doc(collection(db, 'equipment'));
         equipmentIds.push(equipmentRef.id);
         batch.set(equipmentRef, {
           name: item.name,
@@ -241,7 +312,7 @@ export function useCreateKitFromTemplate(projectId: string) {
           procurementStatus: 'needed',
           status: 'available',
           source: 'rental',
-          createdBy: user.uid,
+          createdBy: firebaseUser.uid,
           createdAt: serverTimestamp(),
           updatedAt: serverTimestamp(),
         });
@@ -257,33 +328,38 @@ export function useCreateKitFromTemplate(projectId: string) {
         trackAsUnit: true,
         procurementStatus: 'needed',
         source: 'rental',
-        createdBy: user.uid,
+        createdBy: firebaseUser.uid,
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
       });
 
       // Update equipment items with kit ID
       for (const equipmentId of equipmentIds) {
-        const equipmentRef = doc(db, 'projects', projectId, 'equipment', equipmentId);
+        const equipmentRef = doc(db, 'equipment', equipmentId);
         batch.update(equipmentRef, { packageId: kitRef.id });
       }
 
       await batch.commit();
-      return { kitId: kitRef.id, itemsCreated: items.length };
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['equipment-kits', projectId] });
-      queryClient.invalidateQueries({ queryKey: ['equipment', projectId] });
-    },
-  });
+      const result = { kitId: kitRef.id, itemsCreated: items.length };
+      setIsPending(false);
+      options?.onSuccess?.(result);
+      return result;
+    } catch (err: any) {
+      setIsPending(false);
+      options?.onError?.(err);
+      throw err;
+    }
+  }, [projectId, firebaseUser]);
+
+  return { mutate, isPending };
 }
 
 // Update kit procurement status (and optionally all items in kit)
 export function useUpdateKitStatus(projectId: string) {
-  const queryClient = useQueryClient();
+  const [isPending, setIsPending] = useState(false);
 
-  return useMutation({
-    mutationFn: async ({
+  const mutate = useCallback(async (
+    {
       kitId,
       status,
       updateItems = true,
@@ -291,7 +367,12 @@ export function useUpdateKitStatus(projectId: string) {
       kitId: string;
       status: string;
       updateItems?: boolean;
-    }) => {
+    },
+    options?: { onSuccess?: () => void; onError?: (err: Error) => void }
+  ) => {
+    setIsPending(true);
+
+    try {
       const kitRef = doc(db, 'projects', projectId, 'equipmentKits', kitId);
       
       await updateDoc(kitRef, {
@@ -301,7 +382,7 @@ export function useUpdateKitStatus(projectId: string) {
 
       if (updateItems) {
         // Get kit's equipment IDs and update them
-        const equipmentRef = collection(db, 'projects', projectId, 'equipment');
+        const equipmentRef = collection(db, 'equipment');
         const q = query(equipmentRef, where('packageId', '==', kitId));
         const snapshot = await getDocs(q);
         
@@ -311,10 +392,15 @@ export function useUpdateKitStatus(projectId: string) {
         });
         await batch.commit();
       }
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['equipment-kits', projectId] });
-      queryClient.invalidateQueries({ queryKey: ['equipment', projectId] });
-    },
-  });
+
+      setIsPending(false);
+      options?.onSuccess?.();
+    } catch (err: any) {
+      setIsPending(false);
+      options?.onError?.(err);
+      throw err;
+    }
+  }, [projectId]);
+
+  return { mutate, isPending };
 }

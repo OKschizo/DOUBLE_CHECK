@@ -24,54 +24,243 @@ export function useProjects(status?: 'planning' | 'pre-production' | 'production
   const [error, setError] = useState<Error | null>(null);
 
   useEffect(() => {
-    if (!user?.orgId) {
+    if (!user?.id) {
       setProjects([]);
       setIsLoading(false);
       return;
     }
 
-    // Query for user's projects (includes their Nike clones)
-    let q = query(
-      collection(db, 'projects'),
-      where('orgId', '==', user.orgId),
-      orderBy('createdAt', 'desc')
-    );
+    // We need to get projects from TWO sources:
+    // 1. Projects owned by user's org (orgId match)
+    // 2. Projects user is a member of (via project_members)
+    
+    let unsubscribeOrg: (() => void) | undefined;
+    let unsubscribeMemberships: (() => void) | undefined;
+    
+    const orgProjects: Project[] = [];
+    const memberProjects: Project[] = [];
+    let orgLoaded = false;
+    let membershipsLoaded = false;
 
-    // Optional status filter
-    if (status) {
-      q = query(q, where('status', '==', status));
+    const updateProjects = () => {
+      if (orgLoaded && membershipsLoaded) {
+        // Merge and dedupe projects
+        const allProjects = [...orgProjects];
+        for (const mp of memberProjects) {
+          if (!allProjects.find(p => p.id === mp.id)) {
+            allProjects.push(mp);
+          }
+        }
+        
+        // Sort by createdAt desc
+        allProjects.sort((a, b) => {
+          const aTime = a.createdAt instanceof Date ? a.createdAt.getTime() : 0;
+          const bTime = b.createdAt instanceof Date ? b.createdAt.getTime() : 0;
+          return bTime - aTime;
+        });
+        
+        setProjects(allProjects);
+        setIsLoading(false);
+      }
+    };
+
+    // 1. Query for org-owned projects
+    if (user.orgId) {
+      let orgQuery = query(
+        collection(db, 'projects'),
+        where('orgId', '==', user.orgId),
+        orderBy('createdAt', 'desc')
+      );
+
+      if (status) {
+        orgQuery = query(orgQuery, where('status', '==', status));
+      }
+
+      unsubscribeOrg = onSnapshot(orgQuery, 
+        (snapshot) => {
+          orgProjects.length = 0;
+          snapshot.docs.forEach(doc => {
+            const data = doc.data();
+            // Filter out the public template
+            if (data.orgId === user.orgId) {
+              orgProjects.push({
+                id: doc.id,
+                ...data,
+                isDemo: data.isClonedDemo || false,
+                startDate: data.startDate?.toDate() || new Date(),
+                endDate: data.endDate?.toDate() || new Date(),
+                createdAt: data.createdAt?.toDate() || new Date(),
+                updatedAt: data.updatedAt?.toDate() || new Date(),
+              } as Project);
+            }
+          });
+          orgLoaded = true;
+          updateProjects();
+        },
+        (err) => {
+          console.error('Error fetching org projects:', err);
+          setError(err);
+          orgLoaded = true;
+          updateProjects();
+        }
+      );
+    } else {
+      orgLoaded = true;
     }
 
-    const unsubscribe = onSnapshot(q, 
-      (snapshot) => {
-        const projectList = snapshot.docs
-          .map(doc => ({
-            id: doc.id,
-            ...doc.data(),
-            // Flag cloned demo projects for UI badges
-            isDemo: doc.data().isClonedDemo || false,
-            startDate: doc.data().startDate?.toDate() || new Date(),
-            endDate: doc.data().endDate?.toDate() || new Date(),
-            createdAt: doc.data().createdAt?.toDate() || new Date(),
-            updatedAt: doc.data().updatedAt?.toDate() || new Date(),
-          }))
-          // Filter out the public template demo (orgId: demo-public)
-          .filter(project => project.orgId === user.orgId) as Project[];
+    // 2. Query for projects user is a member of (invited projects)
+    const membershipsQuery = query(
+      collection(db, 'project_members'),
+      where('userId', '==', user.id),
+      where('status', '==', 'active')
+    );
+
+    unsubscribeMemberships = onSnapshot(membershipsQuery,
+      async (snapshot) => {
+        memberProjects.length = 0;
         
-        setProjects(projectList);
+        // Get all project IDs the user is a member of
+        const projectIds = snapshot.docs.map(d => d.data().projectId).filter(Boolean);
+        
+        // Fetch each project
+        for (const projectId of projectIds) {
+          try {
+            const projectDoc = await getDoc(doc(db, 'projects', projectId));
+            if (projectDoc.exists()) {
+              const data = projectDoc.data();
+              // Don't add if it's already from user's org (will be in orgProjects)
+              if (data.orgId !== user.orgId) {
+                const project = {
+                  id: projectDoc.id,
+                  ...data,
+                  isInvited: true, // Flag that this is an invited project
+                  isDemo: data.isClonedDemo || false,
+                  startDate: data.startDate?.toDate() || new Date(),
+                  endDate: data.endDate?.toDate() || new Date(),
+                  createdAt: data.createdAt?.toDate() || new Date(),
+                  updatedAt: data.updatedAt?.toDate() || new Date(),
+                } as Project;
+                
+                // Apply status filter if specified
+                if (!status || project.status === status) {
+                  memberProjects.push(project);
+                }
+              }
+            }
+          } catch (err) {
+            console.error(`Error fetching project ${projectId}:`, err);
+          }
+        }
+        
+        membershipsLoaded = true;
+        updateProjects();
+      },
+      (err) => {
+        console.error('Error fetching memberships:', err);
+        membershipsLoaded = true;
+        updateProjects();
+      }
+    );
+
+    return () => {
+      unsubscribeOrg?.();
+      unsubscribeMemberships?.();
+    };
+  }, [user?.id, user?.orgId, status]);
+
+  return { data: projects, isLoading, error };
+}
+
+// Also export a hook for pending invites
+export function usePendingInvites() {
+  const { user } = useAuth();
+  const [invites, setInvites] = useState<any[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    if (!user?.email) {
+      setInvites([]);
+      setIsLoading(false);
+      return;
+    }
+
+    // Query for pending invites by email (user hasn't accepted yet)
+    const q = query(
+      collection(db, 'project_members'),
+      where('userEmail', '==', user.email.toLowerCase()),
+      where('status', '==', 'pending')
+    );
+
+    const unsubscribe = onSnapshot(q,
+      async (snapshot) => {
+        const inviteList: any[] = [];
+        
+        for (const docSnap of snapshot.docs) {
+          const data = docSnap.data();
+          
+          // Fetch the project details for display
+          try {
+            const projectDoc = await getDoc(doc(db, 'projects', data.projectId));
+            if (projectDoc.exists()) {
+              inviteList.push({
+                id: docSnap.id,
+                ...data,
+                project: {
+                  id: projectDoc.id,
+                  ...projectDoc.data(),
+                },
+                createdAt: data.createdAt?.toDate() || new Date(),
+              });
+            }
+          } catch (err) {
+            console.error('Error fetching project for invite:', err);
+          }
+        }
+        
+        setInvites(inviteList);
         setIsLoading(false);
       },
       (err) => {
-        console.error('Error fetching projects:', err);
-        setError(err);
+        console.error('Error fetching pending invites:', err);
         setIsLoading(false);
       }
     );
 
     return () => unsubscribe();
-  }, [user?.orgId, status]);
+  }, [user?.email]);
 
-  return { data: projects, isLoading, error };
+  return { data: invites, isLoading };
+}
+
+// Accept an invite
+export function useAcceptInvite() {
+  const { user } = useAuth();
+
+  const mutateAsync = async (inviteId: string) => {
+    if (!user) throw new Error('Must be logged in');
+
+    await updateDoc(doc(db, 'project_members', inviteId), {
+      userId: user.id,
+      userName: user.displayName || user.email?.split('@')[0] || 'User',
+      status: 'active',
+      acceptedAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    });
+  };
+
+  return { mutateAsync };
+}
+
+// Decline an invite
+export function useDeclineInvite() {
+  const mutateAsync = async (inviteId: string) => {
+    await updateDoc(doc(db, 'project_members', inviteId), {
+      status: 'declined',
+      updatedAt: serverTimestamp(),
+    });
+  };
+
+  return { mutateAsync };
 }
 
 export function useProject(id: string) {
@@ -184,45 +373,40 @@ export function useDeleteProject() {
       
       if (!projectDoc.exists()) {
         console.warn('Project already deleted or does not exist');
-        // Still return success - it's already gone
         return;
       }
 
       const projectData = projectDoc.data();
       
-      console.log('Delete check for project:', {
-        firestoreDocId: id,
-        projectIdField: projectData.id,
-        projectOrgId: projectData.orgId,
-        userOrgId: user.orgId,
-        projectCreatedBy: projectData.createdBy,
-        userId: user.id,
-        isPublic: projectData.isPublic,
-        isClonedDemo: projectData.isClonedDemo,
-      });
-      
-      // ONLY protect the original template document (Firestore doc ID: demo-nike-project)
-      // Don't check the 'id' field in the data - check the actual Firestore document ID
+      // ONLY protect the original template document
       if (id === 'demo-nike-project' && projectData.orgId === 'demo-public') {
         throw new Error('Cannot delete the public demo template');
       }
       
-      // Simple check: If project is in your org, you can delete it
-      if (projectData.orgId !== user.orgId) {
-        throw new Error('You do not have permission to delete this project (different org)');
-      }
+      // Check: User must be from same org OR be a member with owner role
+      const isOrgOwner = projectData.orgId === user.orgId;
       
-      // If we got here, user owns this project via orgId - allow deletion
+      if (!isOrgOwner) {
+        // Check if user is owner via project_members
+        const memberQuery = query(
+          collection(db, 'project_members'),
+          where('projectId', '==', id),
+          where('userId', '==', user.id),
+          where('role', '==', 'owner')
+        );
+        const memberSnap = await getDocs(memberQuery);
+        
+        if (memberSnap.empty) {
+          throw new Error('You do not have permission to delete this project');
+        }
+      }
 
       // Delete the project
       await deleteDoc(projectRef);
       console.log(`✅ Deleted project: ${id}`);
 
-      // Optional: Clean up related collections (or use Cloud Functions triggers)
-      // For now, orphaned data is okay (can be cleaned up later)
     } catch (error: any) {
       console.error('Delete project error:', error);
-      // If it's already deleted, don't throw
       if (error.message?.includes('not found') || error.code === 'not-found') {
         return;
       }

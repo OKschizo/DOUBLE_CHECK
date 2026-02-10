@@ -1,77 +1,126 @@
-import { trpc } from '@/lib/trpc/client';
-import { useMemo } from 'react';
+import { 
+  collection, 
+  query, 
+  where, 
+  onSnapshot, 
+  addDoc, 
+  updateDoc, 
+  deleteDoc, 
+  doc, 
+  serverTimestamp,
+  orderBy
+} from 'firebase/firestore';
+import { db } from '@/lib/firebase/config';
+import { useAuth } from '@/features/auth/hooks/useAuth';
+import { useEffect, useState, useMemo } from 'react';
 
 export function useSchedule(projectId: string) {
-  const utils = trpc.useUtils();
+  const [scheduleData, setScheduleData] = useState<{ days: any[], events: any[] }>({ days: [], events: [] });
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<Error | null>(null);
+  const { user } = useAuth();
 
-  const { data, isLoading, error } = trpc.schedule.getSchedule.useQuery({ projectId });
+  useEffect(() => {
+    if (!projectId) {
+      setIsLoading(false);
+      return;
+    }
 
-  // Convert date strings to Date objects (tRPC serializes dates as strings)
-  const schedule = useMemo(() => {
-    if (!data) return data;
-    return {
-      ...data,
-      days: data.days.map(day => ({
-        ...day,
-        date: day.date instanceof Date ? day.date : new Date(day.date),
-        createdAt: day.createdAt instanceof Date ? day.createdAt : new Date(day.createdAt),
-        updatedAt: day.updatedAt instanceof Date ? day.updatedAt : new Date(day.updatedAt),
-      })),
-      events: data.events.map(event => ({
-        ...event,
-        createdAt: event.createdAt instanceof Date ? event.createdAt : new Date(event.createdAt),
-        updatedAt: event.updatedAt instanceof Date ? event.updatedAt : new Date(event.updatedAt),
-      })),
+    const daysQuery = query(
+      collection(db, 'schedule_days'),
+      where('projectId', '==', projectId),
+      orderBy('date', 'asc')
+    );
+
+    const eventsQuery = query(
+      collection(db, 'schedule_events'),
+      where('projectId', '==', projectId)
+    );
+
+    const unsubscribeDays = onSnapshot(daysQuery, (snap) => {
+      const days = snap.docs.map(d => ({ 
+        id: d.id, 
+        ...d.data(),
+        date: d.data().date?.toDate() || new Date(d.data().date),
+        createdAt: d.data().createdAt?.toDate(),
+        updatedAt: d.data().updatedAt?.toDate()
+      }));
+      setScheduleData(prev => ({ ...prev, days }));
+      setIsLoading(false);
+    }, (err) => setError(err));
+
+    const unsubscribeEvents = onSnapshot(eventsQuery, (snap) => {
+      const events = snap.docs.map(d => ({ 
+        id: d.id, 
+        ...d.data(),
+        createdAt: d.data().createdAt?.toDate(),
+        updatedAt: d.data().updatedAt?.toDate()
+      }));
+      setScheduleData(prev => ({ ...prev, events }));
+      setIsLoading(false);
+    }, (err) => setError(err));
+
+    return () => {
+      unsubscribeDays();
+      unsubscribeEvents();
     };
-  }, [data]);
+  }, [projectId]);
 
-  const createDay = trpc.schedule.createDay.useMutation({
-    onSuccess: () => {
-      utils.schedule.getSchedule.invalidate({ projectId });
-    },
-  });
+  const schedule = useMemo(() => {
+    return scheduleData;
+  }, [scheduleData]);
 
-  const updateDay = trpc.schedule.updateDay.useMutation({
-    onSuccess: () => {
-      utils.schedule.getSchedule.invalidate({ projectId });
-    },
-  });
+  // Mutations
+  const createDay = async (data: any) => {
+    const docRef = await addDoc(collection(db, 'schedule_days'), {
+      ...data,
+      projectId,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp()
+    });
+    return docRef.id; // Return the new document ID
+  };
 
-  const deleteDay = trpc.schedule.deleteDay.useMutation({
-    onSuccess: () => {
-      utils.schedule.getSchedule.invalidate({ projectId });
-    },
-  });
+  const updateDay = async ({ id, data }: { id: string, data: any }) => {
+    await updateDoc(doc(db, 'schedule_days', id), {
+      ...data,
+      updatedAt: serverTimestamp()
+    });
+  };
 
-  const createEvent = trpc.schedule.createEvent.useMutation({
-    onSuccess: () => {
-      utils.schedule.getSchedule.invalidate({ projectId });
-    },
-  });
+  const deleteDay = async ({ id }: { id: string }) => {
+    await deleteDoc(doc(db, 'schedule_days', id));
+  };
 
-  const updateEvent = trpc.schedule.updateEvent.useMutation({
-    onSuccess: () => {
-      utils.schedule.getSchedule.invalidate({ projectId });
-    },
-  });
+  const createEvent = async (data: any) => {
+    await addDoc(collection(db, 'schedule_events'), {
+      ...data,
+      projectId,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp()
+    });
+  };
 
-  const deleteEvent = trpc.schedule.deleteEvent.useMutation({
-    onSuccess: () => {
-      utils.schedule.getSchedule.invalidate({ projectId });
-    },
-  });
+  const updateEvent = async ({ id, data }: { id: string, data: any }) => {
+    await updateDoc(doc(db, 'schedule_events', id), {
+      ...data,
+      updatedAt: serverTimestamp()
+    });
+  };
+
+  const deleteEvent = async ({ id }: { id: string }) => {
+    await deleteDoc(doc(db, 'schedule_events', id));
+  };
 
   return {
     schedule,
     isLoading,
     error,
-    createDay,
-    updateDay,
-    deleteDay,
-    createEvent,
-    updateEvent,
-    deleteEvent,
+    createDay: { mutate: createDay, mutateAsync: createDay },
+    updateDay: { mutate: updateDay, mutateAsync: updateDay },
+    deleteDay: { mutate: deleteDay, mutateAsync: deleteDay },
+    createEvent: { mutate: createEvent, mutateAsync: createEvent },
+    updateEvent: { mutate: updateEvent, mutateAsync: updateEvent },
+    deleteEvent: { mutate: deleteEvent, mutateAsync: deleteEvent },
   };
 }
-
-

@@ -114,15 +114,42 @@ export function useMyRole(projectId: string) {
 }
 
 export function useAddProjectMember() {
-  const mutateAsync = async (data: any) => {
-    await addDoc(collection(db, 'project_members'), {
-      ...data,
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp(),
-    });
+  const { user } = useAuth();
+  const [isPending, setIsPending] = useState(false);
+
+  const mutateAsync = async (data: { 
+    projectId: string; 
+    userEmail: string; 
+    role: string;
+    status?: string;
+    invitedAt?: Date;
+  }): Promise<{ inviteId: string; inviteLink: string }> => {
+    setIsPending(true);
+    try {
+      // Create the invite record
+      const docRef = await addDoc(collection(db, 'project_members'), {
+        projectId: data.projectId,
+        userEmail: data.userEmail.toLowerCase(),
+        role: data.role,
+        status: data.status || 'pending',
+        invitedBy: user?.id,
+        invitedByName: user?.displayName || user?.email,
+        invitedAt: serverTimestamp(),
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      });
+      
+      // Generate the invite link
+      const baseUrl = typeof window !== 'undefined' ? window.location.origin : '';
+      const inviteLink = `${baseUrl}/invitation/${docRef.id}`;
+      
+      return { inviteId: docRef.id, inviteLink };
+    } finally {
+      setIsPending(false);
+    }
   };
 
-  return { mutateAsync, mutate: mutateAsync };
+  return { mutateAsync, mutate: mutateAsync, isPending };
 }
 
 export function useUpdateMemberRole() {

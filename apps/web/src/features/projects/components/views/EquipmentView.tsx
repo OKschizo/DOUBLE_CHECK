@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useEquipmentByProject, useCreateEquipment, useUpdateEquipment, useDeleteEquipment } from '@/features/equipment/hooks/useEquipment';
 import { useCrewByProject } from '@/features/crew/hooks/useCrew';
 import { useProject, useUpdateProject } from '@/features/projects/hooks/useProjects';
@@ -15,7 +15,13 @@ interface EquipmentViewProps {
 }
 
 // Get category names from comprehensive list plus 'Other' for custom
-const CATEGORIES = [...EQUIPMENT_CATEGORIES.map(c => c.name), 'Other'];
+// Include common variants to ensure filtering works with existing data
+const CATEGORIES = [
+  ...EQUIPMENT_CATEGORIES.map(c => c.name),
+  // Common singular/alternative names used in existing data
+  'Camera', 'Lighting', 'Grip', 'Sound',
+  'Other'
+].filter((v, i, a) => a.indexOf(v) === i); // Remove duplicates
 
 // Procurement status options with labels and colors
 const PROCUREMENT_STATUSES = [
@@ -55,10 +61,14 @@ export function EquipmentView({ projectId }: EquipmentViewProps) {
   const [editingItem, setEditingItem] = useState<any>(null);
   const [detailItem, setDetailItem] = useState<any>(null);
   const [activeDetailTab, setActiveDetailTab] = useState<'info' | 'tracking' | 'assignment'>('info');
+  const [showMobileFilters, setShowMobileFilters] = useState(false);
+  const [showMobileMenu, setShowMobileMenu] = useState(false);
+  const [expandedCards, setExpandedCards] = useState<Set<string>>(new Set());
   
   // Filtering state
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategories, setSelectedCategories] = useState<Set<string>>(new Set(CATEGORIES));
+  const [categoriesInitialized, setCategoriesInitialized] = useState(false);
   const [useCustomItem, setUseCustomItem] = useState(false);
   const [statusFilter, setStatusFilter] = useState<string>('all');
   
@@ -95,6 +105,21 @@ export function EquipmentView({ projectId }: EquipmentViewProps) {
   const { data: equipment = [], isLoading } = useEquipmentByProject(projectId);
   const { data: crewMembers = [] } = useCrewByProject(projectId);
   const { days: shootingDays = [] } = useSchedule(projectId);
+
+  // Get all unique categories from actual equipment data + predefined
+  const allCategories = useMemo(() => {
+    const equipmentCategories = equipment.map((e: any) => e.category).filter(Boolean);
+    const customCategories = project?.customEquipmentCategories || [];
+    return [...new Set([...CATEGORIES, ...equipmentCategories, ...customCategories])].sort();
+  }, [equipment, project?.customEquipmentCategories]);
+
+  // Auto-select all categories (including from data) when equipment loads
+  useEffect(() => {
+    if (!categoriesInitialized && equipment.length > 0) {
+      setSelectedCategories(new Set(allCategories));
+      setCategoriesInitialized(true);
+    }
+  }, [equipment, allCategories, categoriesInitialized]);
 
   const createEquipment = useCreateEquipment();
   const updateEquipment = useUpdateEquipment();
@@ -337,11 +362,6 @@ export function EquipmentView({ projectId }: EquipmentViewProps) {
     }
   };
 
-  const allCategories = [
-    ...CATEGORIES,
-    ...(project?.customEquipmentCategories || []),
-  ].sort();
-
   // Filter equipment by search, selected categories, and status
   const filteredEquipment = equipment.filter((item: any) => {
     // Filter by category
@@ -404,18 +424,72 @@ export function EquipmentView({ projectId }: EquipmentViewProps) {
   }
 
   return (
-    <div className="flex h-full">
-      <div className="flex-1 overflow-y-auto p-8">
-        {/* Header and Actions - Simplified */}
-        <div className="mb-8">
-            <div className="mb-4">
-              <h1 className="text-3xl font-bold mb-2 text-text-primary">Equipment</h1>
-              <p className="text-text-secondary">
-                {filteredEquipment.length} of {equipment.length} items
-                {searchQuery && <span className="text-accent-primary"> • Searching &quot;{searchQuery}&quot;</span>}
-              </p>
+    <div className="flex flex-col md:flex-row h-full relative">
+      {/* Mobile Filter Toggle Button */}
+      <button
+        onClick={() => setShowMobileFilters(true)}
+        className="md:hidden fixed bottom-20 right-4 z-30 w-14 h-14 bg-accent-primary rounded-full shadow-lg flex items-center justify-center text-white"
+        aria-label="Open filters"
+      >
+        <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
+        </svg>
+      </button>
+
+      <div className="flex-1 overflow-y-auto p-4 md:p-8 pb-24 md:pb-8">
+        {/* Header and Actions - Mobile Optimized */}
+        <div className="mb-6 md:mb-8">
+            <div className="flex items-start justify-between mb-4">
+              <div>
+                <h1 className="text-2xl md:text-3xl font-bold mb-1 text-text-primary">Equipment</h1>
+                <p className="text-text-secondary text-sm">
+                  {filteredEquipment.length} of {equipment.length} items
+                  {searchQuery && <span className="text-accent-primary"> • &quot;{searchQuery}&quot;</span>}
+                </p>
+              </div>
+              {/* Mobile overflow menu */}
+              <div className="relative md:hidden">
+                <button
+                  onClick={() => setShowMobileMenu(!showMobileMenu)}
+                  className="p-3 rounded-lg bg-background-secondary border border-border-default"
+                >
+                  <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+                    <circle cx="12" cy="5" r="2"/>
+                    <circle cx="12" cy="12" r="2"/>
+                    <circle cx="12" cy="19" r="2"/>
+                  </svg>
+                </button>
+                {showMobileMenu && (
+                  <>
+                    <div className="fixed inset-0 z-40" onClick={() => setShowMobileMenu(false)} />
+                    <div className="absolute right-0 top-full mt-2 w-56 bg-background-secondary border border-border-default rounded-lg shadow-xl z-50 overflow-hidden">
+                      <button
+                        onClick={() => { setShowMobileMenu(false); setShowTemplatesModal(true); }}
+                        className="w-full px-4 py-3 text-left text-sm hover:bg-background-tertiary flex items-center gap-3"
+                      >
+                        <span className="text-lg">📋</span> Apply Template
+                      </button>
+                      <button
+                        onClick={() => { setShowMobileMenu(false); setShowKitsModal(true); }}
+                        className="w-full px-4 py-3 text-left text-sm hover:bg-background-tertiary flex items-center gap-3"
+                      >
+                        <span className="text-lg">📦</span> Manage Kits
+                      </button>
+                      <div className="border-t border-border-default" />
+                      <button
+                        onClick={() => { setShowMobileMenu(false); setShowAddCategoryModal(true); }}
+                        className="w-full px-4 py-3 text-left text-sm hover:bg-background-tertiary flex items-center gap-3"
+                      >
+                        <span className="text-lg">➕</span> Add Category
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
             </div>
-            <div className="flex gap-2 mb-4">
+            
+            {/* Desktop action buttons */}
+            <div className="hidden md:flex flex-wrap gap-2 mb-4">
                 <button onClick={() => {
                     setFormData({
                         name: '',
@@ -436,13 +510,31 @@ export function EquipmentView({ projectId }: EquipmentViewProps) {
                     </>
                 )}
             </div>
+            
+            {/* Mobile primary action - Add Item */}
+            <button 
+              onClick={() => {
+                setFormData({
+                    name: '',
+                    category: '',
+                    description: '',
+                    dailyRate: '',
+                    weeklyRate: '',
+                    quantity: '1',
+                });
+                setShowAddForm(true);
+              }} 
+              className="md:hidden w-full btn-primary py-3 text-base font-semibold mb-4"
+            >
+              + Add Equipment Item
+            </button>
         </div>
 
         {/* Add Form */}
         {showAddForm && (
-            <div className="card-elevated p-6 mb-8">
+            <div className="card-elevated p-4 md:p-6 mb-6 md:mb-8">
                 <form onSubmit={handleAddSubmit} className="space-y-4">
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div>
                           <label className="block text-sm font-medium text-text-primary mb-1">Category *</label>
                           <select 
@@ -520,7 +612,7 @@ export function EquipmentView({ projectId }: EquipmentViewProps) {
                         </div>
                     </div>
                     <textarea className="input-field" placeholder="Description" value={formData.description} onChange={e => setFormData({...formData, description: e.target.value})} />
-                    <div className="grid grid-cols-3 gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                         <div>
                           <label className="block text-sm font-medium text-text-primary mb-1">Daily Rate ($)</label>
                           <input type="number" className="input-field w-full" placeholder="0" value={formData.dailyRate} onChange={e => setFormData({...formData, dailyRate: e.target.value})} />
@@ -542,103 +634,236 @@ export function EquipmentView({ projectId }: EquipmentViewProps) {
             </div>
         )}
 
-        {/* Equipment List */}
-        <div className="space-y-8">
+        {/* Equipment List - Compact Grid */}
+        <div className="space-y-6">
           {Object.entries(itemsByCategory).map(([cat, items]: [string, any]) => (
             <div key={cat}>
-              <div className="flex items-center gap-3 mb-4">
-                <h2 className="text-xl font-bold text-text-primary">{cat}</h2>
-                <span className="badge-primary">{items.length}</span>
+              <div className="flex items-center gap-2 mb-3">
+                <h2 className="text-sm md:text-base font-semibold text-text-primary">{cat}</h2>
+                <span className="text-xs px-1.5 py-0.5 bg-background-secondary rounded text-text-tertiary">{items.length}</span>
               </div>
-              <div className={`grid ${viewMode === 'grid' ? 'grid-cols-1 md:grid-cols-2 lg:grid-cols-3' : 'grid-cols-1'} gap-4`}>
-                {items.map((item: any) => (
-                  <div 
-                    key={item.id} 
-                    className={`card p-4 relative ${selectedItems.has(item.id) ? 'ring-2 ring-accent-primary border-accent-primary' : ''}`}
-                  >
-                    <div className="flex items-start gap-4">
-                      <input
-                        type="checkbox"
-                        checked={selectedItems.has(item.id)}
-                        onChange={() => handleToggleSelect(item.id)}
-                        className="mt-1 w-4 h-4"
-                      />
-                      <div className="flex-1">
-                        <div className="flex justify-between items-start">
-                          <div>
-                            <h3 className="font-bold text-text-primary">{item.name}</h3>
-                            <p className="text-sm text-accent-primary">{item.category}</p>
-                          </div>
-                          <div className="flex gap-1">
-                            <button
-                              onClick={() => handleEdit(item)}
-                              className="text-text-tertiary hover:text-accent-primary p-1"
-                            >
-                              ✏️
-                            </button>
-                            <button
-                              onClick={() => {
-                                if (confirm('Delete equipment item?')) {
-                                  deleteEquipment.mutateAsync({ id: item.id });
-                                }
-                              }}
-                              className="text-text-tertiary hover:text-error p-1"
-                            >
-                              🗑️
-                            </button>
-                          </div>
+              {/* Compact 2-col on mobile, 3-4 col on larger */}
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2 md:gap-3">
+                {items.map((item: any) => {
+                  const statusInfo = getProcurementStatus(item.procurementStatus || 'needed');
+                  
+                  return (
+                    <div 
+                      key={item.id} 
+                      onClick={() => handleViewDetail(item)}
+                      className={`bg-background-secondary border border-border-subtle rounded-lg overflow-hidden cursor-pointer hover:border-accent-primary/50 transition-all ${selectedItems.has(item.id) ? 'ring-2 ring-accent-primary border-accent-primary' : ''}`}
+                    >
+                      {/* Equipment Image (if available) */}
+                      {item.imageUrl && (
+                        <div className="h-20 md:h-24 w-full">
+                          <img 
+                            src={item.imageUrl} 
+                            alt={item.name}
+                            className="w-full h-full object-cover"
+                          />
                         </div>
-                        <div className="mt-2 space-y-1 text-sm text-text-secondary">
-                          {/* Status Badge */}
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium text-white ${getProcurementStatus(item.procurementStatus || 'needed').color}`}>
-                              {getProcurementStatus(item.procurementStatus || 'needed').icon} {getProcurementStatus(item.procurementStatus || 'needed').label}
-                            </span>
-                            {item.source && (
-                              <span className="text-xs text-text-tertiary">
-                                {SOURCE_OPTIONS.find(s => s.value === item.source)?.icon} {SOURCE_OPTIONS.find(s => s.value === item.source)?.label}
-                              </span>
-                            )}
-                            {item.packageId && (
-                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium bg-purple-500/20 text-purple-400 border border-purple-500/30">
-                                📦 In Kit
-                              </span>
+                      )}
+                      
+                      {/* Compact card content */}
+                      <div className="p-2.5 md:p-3">
+                        <div className="flex items-start gap-2">
+                          {/* Checkbox - compact */}
+                          <input
+                            type="checkbox"
+                            checked={selectedItems.has(item.id)}
+                            onChange={(e) => {
+                              e.stopPropagation();
+                              handleToggleSelect(item.id);
+                            }}
+                            onClick={(e) => e.stopPropagation()}
+                            className="mt-0.5 w-4 h-4 rounded flex-shrink-0"
+                          />
+                          
+                          <div className="flex-1 min-w-0">
+                            {/* Item name - truncated */}
+                            <h3 className="text-xs md:text-sm font-medium text-text-primary truncate leading-tight">{item.name}</h3>
+                            
+                            {/* Status badge - very compact */}
+                            <div className="flex items-center gap-1 mt-1">
+                              <span className={`inline-block w-2 h-2 rounded-full ${statusInfo.color}`} title={statusInfo.label}></span>
+                              <span className="text-[10px] text-text-tertiary truncate">{statusInfo.label}</span>
+                              {item.quantity > 1 && (
+                                <span className="text-[10px] text-text-tertiary">×{item.quantity}</span>
+                              )}
+                            </div>
+                            
+                            {/* Rate - if exists */}
+                            {item.dailyRate > 0 && (
+                              <div className="text-[10px] text-text-tertiary mt-0.5">${item.dailyRate}/day</div>
                             )}
                           </div>
-                          {item.description && <div className="line-clamp-1">{item.description}</div>}
-                          {item.quantity && <div>📦 Quantity: {item.quantity}</div>}
-                          {item.dailyRate && <div>💰 ${item.dailyRate}/day</div>}
-                          {item.weeklyRate && <div>💵 ${item.weeklyRate}/week</div>}
-                          {item.daysNeeded && <div>📅 {item.daysNeeded} day{item.daysNeeded > 1 ? 's' : ''} needed</div>}
-                          {item.responsiblePartyId && (
-                            <div className="text-xs">
-                              👤 {crewMembers.find((c: any) => c.id === item.responsiblePartyId)?.name || 'Assigned'}
-                            </div>
+                          
+                          {/* Kit indicator */}
+                          {item.packageId && (
+                            <span className="text-[10px]" title="In Kit">📦</span>
                           )}
-                          {item.shootingDayIds?.length > 0 && (
-                            <div className="text-xs">
-                              🎬 {item.shootingDayIds.length} shoot day{item.shootingDayIds.length > 1 ? 's' : ''}
-                            </div>
-                          )}
-                          {item.rentalVendor && (
-                            <div className="text-xs text-text-tertiary">
-                              🏪 {item.rentalVendor}
-                            </div>
-                          )}
-                          {item.weeklyRate && <div>💵 ${item.weeklyRate}/week</div>}
                         </div>
                       </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
           ))}
         </div>
       </div>
+      
+      {/* Mobile Bottom Action Bar - shown when items selected */}
+      {selectedItems.size > 0 && (
+        <div className="md:hidden fixed bottom-0 left-0 right-0 bg-background-secondary border-t border-border-default p-4 z-30 safe-area-bottom">
+          <div className="flex items-center justify-between mb-3">
+            <span className="text-sm font-medium">{selectedItems.size} selected</span>
+            <button
+              onClick={() => setSelectedItems(new Set())}
+              className="text-sm text-text-tertiary"
+            >
+              Clear
+            </button>
+          </div>
+          <div className="flex gap-2">
+            <button
+              onClick={handleBulkCreateBudget}
+              className="flex-1 py-3 bg-accent-primary/20 text-accent-primary rounded-lg font-medium"
+            >
+              Add to Budget
+            </button>
+            <button
+              onClick={handleBulkDelete}
+              className="flex-1 py-3 bg-error/20 text-error rounded-lg font-medium"
+            >
+              Delete
+            </button>
+          </div>
+        </div>
+      )}
 
-      {/* Right Sidebar - Equipment Overview & Filters */}
-      <aside className="w-80 bg-background-secondary border-l border-border-subtle overflow-y-auto p-6">
+      {/* Mobile Filter Overlay */}
+      {showMobileFilters && (
+        <div className="fixed inset-0 z-50 md:hidden">
+          <div 
+            className="absolute inset-0 bg-black/60" 
+            onClick={() => setShowMobileFilters(false)} 
+          />
+          <aside className="absolute right-0 top-0 bottom-0 w-80 max-w-[90vw] bg-background-secondary overflow-y-auto p-6 animate-in slide-in-from-right">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-bold text-text-primary">Equipment Overview</h3>
+              <button
+                onClick={() => setShowMobileFilters(false)}
+                className="p-2 text-text-secondary hover:text-text-primary"
+              >
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            
+            {/* Search */}
+            <div className="mb-6">
+              <label className="block text-sm font-semibold text-text-secondary mb-2">Search</label>
+              <input
+                type="text"
+                placeholder="Search by name, description..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full px-3 py-2 bg-background-primary border border-border-default rounded-lg text-text-primary placeholder-text-tertiary focus:outline-none focus:ring-2 focus:ring-accent-primary"
+              />
+            </div>
+
+            {/* Status Filter */}
+            <div className="mb-6">
+              <label className="block text-sm font-semibold text-text-secondary mb-2">Filter by Status</label>
+              <select
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value)}
+                className="w-full px-3 py-2 bg-background-primary border border-border-default rounded-lg text-text-primary focus:outline-none focus:ring-2 focus:ring-accent-primary"
+              >
+                <option value="all">All Statuses</option>
+                {PROCUREMENT_STATUSES.map(status => (
+                  <option key={status.value} value={status.value}>{status.icon} {status.label}</option>
+                ))}
+              </select>
+            </div>
+
+            {/* Filter by Category */}
+            <div className="mb-6">
+              <div className="flex items-center justify-between mb-3">
+                <h4 className="text-sm font-semibold text-text-secondary">Filter by Category</h4>
+                <div className="flex gap-2">
+                  <button onClick={selectAllCategories} className="text-xs text-accent-primary hover:text-accent-hover">All</button>
+                  <button onClick={deselectAllCategories} className="text-xs text-accent-primary hover:text-accent-hover">None</button>
+                </div>
+              </div>
+              <div className="space-y-1 max-h-64 overflow-y-auto">
+                {allCategories.map((cat) => {
+                  const count = getCategoryCount(cat);
+                  const isSelected = selectedCategories.has(cat);
+                  const icon = getCategoryIcon(cat);
+                  return (
+                    <label
+                      key={cat}
+                      className={`flex items-center justify-between px-3 py-2 rounded-lg cursor-pointer transition-colors ${
+                        isSelected ? 'bg-accent-primary/10 text-text-primary' : 'hover:bg-background-tertiary text-text-secondary'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="checkbox"
+                          checked={isSelected}
+                          onChange={() => toggleCategory(cat)}
+                          className="w-4 h-4 rounded border-border-default text-accent-primary focus:ring-accent-primary"
+                        />
+                        <span className="text-sm">{icon} {cat}</span>
+                      </div>
+                      <span className="text-xs text-text-tertiary bg-background-tertiary px-2 py-0.5 rounded">{count}</span>
+                    </label>
+                  );
+                })}
+              </div>
+              <button
+                onClick={() => { setShowAddCategoryModal(true); setShowMobileFilters(false); }}
+                className="w-full mt-3 py-2 border-2 border-dashed border-border-default rounded-lg text-sm text-text-secondary hover:border-accent-primary hover:text-accent-primary"
+              >
+                + Add Custom Category
+              </button>
+            </div>
+
+            {/* Quick Stats */}
+            <div className="mb-6">
+              <h4 className="text-sm font-semibold text-text-secondary mb-3">Quick Stats</h4>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="bg-background-tertiary rounded-lg p-3">
+                  <div className="text-2xl font-bold text-accent-primary">{equipment.length}</div>
+                  <div className="text-xs text-text-secondary">Total Items</div>
+                </div>
+                <div className="bg-background-tertiary rounded-lg p-3">
+                  <div className="text-2xl font-bold text-green-500">{Object.keys(itemsByCategory).length}</div>
+                  <div className="text-xs text-text-secondary">Categories</div>
+                </div>
+                <div className="col-span-2 bg-background-tertiary rounded-lg p-3">
+                  <div className="text-2xl font-bold text-yellow-500">${totalDailyValue.toLocaleString()}</div>
+                  <div className="text-xs text-text-secondary">Est. Daily Rate</div>
+                </div>
+              </div>
+            </div>
+
+            {/* Apply Filters Button */}
+            <button
+              onClick={() => setShowMobileFilters(false)}
+              className="w-full py-3 bg-accent-primary text-white rounded-lg font-medium"
+            >
+              Apply Filters
+            </button>
+          </aside>
+        </div>
+      )}
+
+      {/* Right Sidebar - Equipment Overview & Filters (Desktop Only) */}
+      <aside className="hidden md:block w-80 bg-background-secondary border-l border-border-subtle overflow-y-auto p-6">
         <h3 className="text-lg font-bold mb-4 text-text-primary">Equipment Overview</h3>
         
         {/* Search */}

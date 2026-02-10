@@ -1,8 +1,12 @@
 'use client';
 
 import { useState } from 'react';
-import { trpc } from '@/lib/trpc/client';
+// import { trpc } from '@/lib/trpc/client';
 import { getProjectTerminology } from '@/shared/utils/projectTerminology';
+import { useProject } from '@/features/projects/hooks/useProjects';
+import { useScenesByProject } from '@/features/scenes/hooks/useScenes';
+import { useShotsByScene } from '@/features/scenes/hooks/useShots';
+import { useSchedule } from '@/features/projects/hooks/useSchedule';
 
 interface ScheduleSyncModalProps {
   projectId: string;
@@ -11,46 +15,18 @@ interface ScheduleSyncModalProps {
 }
 
 export function ScheduleSyncModal({ projectId, isOpen, onClose }: ScheduleSyncModalProps) {
-  const utils = trpc.useUtils();
-  const { data: project } = trpc.projects.getById.useQuery({ id: projectId });
-  const { data: scenes = [] } = trpc.scenes.listByProject.useQuery({ projectId });
+  const { data: project } = useProject(projectId);
+  const { data: scenes = [] } = useScenesByProject(projectId);
   const terminology = getProjectTerminology(project?.projectType);
+  const { schedule } = useSchedule(projectId);
 
-  const syncAllScenes = trpc.scenes.syncAllToSchedule.useMutation({
-    onSuccess: (result) => {
-      alert(result.message);
-      utils.schedule.getSchedule.invalidate({ projectId });
-      onClose();
-    },
-    onError: (error) => {
-      alert(`Failed to sync: ${error.message}`);
-    },
-  });
+  // Placeholder mutations
+  const syncAllScenes = { isPending: false, mutate: (args: any) => alert("Sync logic needs to be implemented on client or cloud function") };
+  const syncScene = { isPending: false, mutate: (args: any) => alert("Sync logic needs to be implemented on client or cloud function") };
+  const syncShot = { isPending: false, mutate: (args: any) => alert("Sync logic needs to be implemented on client or cloud function") };
 
-  const syncScene = trpc.scenes.syncToSchedule.useMutation({
-    onSuccess: (result) => {
-      alert(result.message);
-      utils.schedule.getSchedule.invalidate({ projectId });
-    },
-    onError: (error) => {
-      alert(`Failed to sync: ${error.message}`);
-    },
-  });
-
-  const syncShot = trpc.shots.syncToSchedule.useMutation({
-    onSuccess: (result) => {
-      alert(result.message);
-      utils.schedule.getSchedule.invalidate({ projectId });
-    },
-    onError: (error) => {
-      alert(`Failed to sync: ${error.message}`);
-    },
-  });
   const [selectedSceneId, setSelectedSceneId] = useState<string>('');
-  const { data: shots = [] } = trpc.scenes.getShotsByScene.useQuery(
-    { sceneId: selectedSceneId },
-    { enabled: !!selectedSceneId }
-  );
+  const { data: shots = [] } = useShotsByScene(selectedSceneId);
 
   const selectedScene = scenes.find(s => s.id === selectedSceneId);
 
@@ -188,4 +164,3 @@ export function ScheduleSyncModal({ projectId, isOpen, onClose }: ScheduleSyncMo
     </div>
   );
 }
-

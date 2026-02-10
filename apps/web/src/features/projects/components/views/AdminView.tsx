@@ -1,9 +1,15 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { trpc } from '@/lib/trpc/client';
+// import { trpc } from '@/lib/trpc/client';
 import { useAuth } from '@/features/auth/hooks/useAuth';
 import type { ProjectRole } from '@/lib/schemas';
+import { useProject, useUpdateProject } from '@/features/projects/hooks/useProjects';
+import { useProjectMembers, useMyRole, useAddProjectMember, useUpdateMemberRole, useRemoveProjectMember } from '@/features/projectMembers/hooks/useProjectMembers';
+import { useDepartmentHeads } from '@/features/projectMembers/hooks/useDepartmentHeads';
+import { useRoleRequests } from '@/features/projectMembers/hooks/useRoleRequests';
+import { useCrewByProject } from '@/features/crew/hooks/useCrew';
+import { uploadImage, generateUniqueFilename, deleteImage, isBlobUrl } from '@/lib/firebase/storage';
 
 interface AdminViewProps {
   projectId: string;
@@ -33,15 +39,16 @@ export function AdminView({ projectId, userRole, initialTab }: AdminViewProps) {
   const [activeTab, setActiveTab] = useState<'team' | 'deptHeads' | 'roleRequests' | 'settings'>(
     getInitialTab()
   );
-  const utils = trpc.useUtils();
+  // const utils = trpc.useUtils();
 
   // Queries
-  const { data: project } = trpc.projects.getById.useQuery({ id: projectId });
-  const { data: members = [] } = trpc.projectMembers.listByProject.useQuery({ projectId });
-  const { data: departmentHeads = [] } = trpc.departmentHeads.listByProject.useQuery({ projectId });
-  const { data: crewMembers = [] } = trpc.crew.listByProject.useQuery({ projectId });
-  const { data: roleRequests = [] } = trpc.roleRequests.listByProject.useQuery({ projectId });
-  const { data: pendingCount } = trpc.roleRequests.getPendingCount.useQuery({ projectId });
+  const { data: project } = useProject(projectId);
+  const { data: members = [] } = useProjectMembers(projectId);
+  const { data: departmentHeads = [] } = useDepartmentHeads(projectId);
+  const { data: crewMembers = [] } = useCrewByProject(projectId);
+  const { data: roleRequests = [] } = useRoleRequests(projectId);
+  
+  const pendingCount = { count: roleRequests.filter((r: any) => r.status === 'pending').length };
 
   // Get unique departments from crew
   const departments = Array.from(
@@ -49,7 +56,7 @@ export function AdminView({ projectId, userRole, initialTab }: AdminViewProps) {
   ).sort();
 
   // Get active members with accounts for department head assignment
-  const activeMembers = members.filter((m) => m.status === 'active');
+  const activeMembers = members.filter((m: any) => m.status === 'active');
 
   return (
     <div className="p-8">
@@ -174,86 +181,12 @@ function TeamManagementTab({ members, crewMembers, projectId }: { members: any[]
   const [showInviteForm, setShowInviteForm] = useState(false);
   const [inviteEmail, setInviteEmail] = useState('');
   const [inviteRole, setInviteRole] = useState<ProjectRole>('crew');
+  const [inviteLink, setInviteLink] = useState<string | null>(null);
+  const [copiedLink, setCopiedLink] = useState(false);
   
-  const utils = trpc.useUtils();
-  
-  const addMember = trpc.projectMembers.addMember.useMutation({
-    onSuccess: () => {
-      utils.projectMembers.listByProject.invalidate({ projectId });
-      setShowInviteForm(false);
-      setInviteEmail('');
-      setInviteRole('crew');
-      alert('Invitation sent successfully!');
-    },
-    onError: (error) => {
-      console.error('Invite error:', error);
-      alert(`Failed to invite member: ${error.message}`);
-    },
-  });
-  
-  const updateRole = trpc.projectMembers.updateRole.useMutation({
-    onSuccess: () => {
-      utils.projectMembers.listByProject.invalidate({ projectId });
-    },
-    onError: (error) => {
-      console.error('Update role error:', error);
-      alert(`Failed to update role: ${error.message}`);
-    },
-  });
-
-  const removeMember = trpc.projectMembers.removeMember.useMutation({
-    onSuccess: () => {
-      utils.projectMembers.listByProject.invalidate({ projectId });
-    },
-  });
-
-  const backfillCrewCards = trpc.crew.backfillCrewCards.useMutation({
-    onSuccess: (data) => {
-      utils.crew.listByProject.invalidate({ projectId });
-      const parts = [];
-      if (data.created > 0) parts.push(`Created ${data.created} new crew card${data.created !== 1 ? 's' : ''}`);
-      if (data.linked > 0) parts.push(`Linked ${data.linked} existing crew card${data.linked !== 1 ? 's' : ''} to users`);
-      if (data.skipped > 0) parts.push(`${data.skipped} member${data.skipped !== 1 ? 's' : ''} already had crew cards`);
-      alert(parts.length > 0 ? parts.join(', ') : 'No changes needed');
-    },
-  });
-
-  const inviteFromCrewCards = trpc.projectMembers.inviteFromCrewCards.useMutation({
-    onSuccess: (data) => {
-      utils.projectMembers.listByProject.invalidate({ projectId });
-      utils.crew.listByProject.invalidate({ projectId });
-      alert(`Sent ${data.invited} invitation${data.invited !== 1 ? 's' : ''}${data.skipped > 0 ? `, ${data.skipped} skipped` : ''}`);
-    },
-    onError: (error) => {
-      console.error('Invite from crew cards error:', error);
-      alert(`Failed to send invitations: ${error.message}`);
-    },
-  });
-
-  const activateMember = trpc.projectMembers.activateMember.useMutation({
-    onSuccess: () => {
-      utils.projectMembers.listByProject.invalidate({ projectId });
-      utils.crew.listByProject.invalidate({ projectId });
-    },
-  });
-
-  const activateAllPending = trpc.projectMembers.activateAllPending.useMutation({
-    onSuccess: (data) => {
-      utils.projectMembers.listByProject.invalidate({ projectId });
-      utils.crew.listByProject.invalidate({ projectId });
-      alert(`Activated ${data.activated} member(s)${data.skipped > 0 ? `. ${data.skipped} skipped.` : ''}`);
-    },
-    onError: (error) => {
-      alert(`Failed to activate members: ${error.message}`);
-    },
-  });
-
-  const migrateLegacyRoles = trpc.projectMembers.migrateLegacyRoles.useMutation({
-    onSuccess: (data) => {
-      utils.projectMembers.listByProject.invalidate({ projectId });
-      alert(`Migrated ${data.migratedCount} users from old role system to new system`);
-    },
-  });
+  const addMember = useAddProjectMember();
+  const updateRole = useUpdateMemberRole();
+  const removeMember = useRemoveProjectMember();
 
   const getRoleBadgeColor = (role: string) => {
     switch (role) {
@@ -283,34 +216,44 @@ function TeamManagementTab({ members, crewMembers, projectId }: { members: any[]
     }
   };
 
+  const handleAddMember = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!inviteEmail) return;
+    try {
+      const result = await addMember.mutateAsync({
+        projectId,
+        userEmail: inviteEmail,
+        role: inviteRole,
+      });
+      
+      // Show the invite link
+      setInviteLink(result.inviteLink);
+      setInviteEmail('');
+      setInviteRole('crew');
+    } catch (error: any) {
+      alert('Failed to invite: ' + error.message);
+    }
+  };
+
+  const handleCopyLink = () => {
+    if (inviteLink) {
+      navigator.clipboard.writeText(inviteLink);
+      setCopiedLink(true);
+      setTimeout(() => setCopiedLink(false), 2000);
+    }
+  };
+
+  const handleCloseInviteSuccess = () => {
+    setInviteLink(null);
+    setShowInviteForm(false);
+  };
+
   return (
     <div className="space-y-4">
       {/* Action buttons */}
       <div className="flex justify-between items-center mb-6">
         <h2 className="text-xl font-semibold text-text-primary">Team Members</h2>
         <div className="flex gap-3">
-          <button
-            onClick={() => {
-              if (confirm('Migrate users with old roles (editor/viewer) to the new role system?')) {
-                migrateLegacyRoles.mutate({ projectId });
-              }
-            }}
-            disabled={migrateLegacyRoles.isPending}
-            className="px-4 py-2 bg-purple-500/20 text-purple-400 rounded-lg hover:bg-purple-500/30 transition-colors disabled:opacity-50"
-          >
-            {migrateLegacyRoles.isPending ? 'Migrating...' : '⚡ Migrate Roles'}
-          </button>
-          <button
-            onClick={() => {
-              if (confirm('Create crew cards for all team members who don\'t have one yet?')) {
-                backfillCrewCards.mutate({ projectId });
-              }
-            }}
-            disabled={backfillCrewCards.isPending}
-            className="px-4 py-2 bg-blue-500/20 text-blue-400 rounded-lg hover:bg-blue-500/30 transition-colors disabled:opacity-50"
-          >
-            {backfillCrewCards.isPending ? 'Creating...' : '🔄 Sync Crew Cards'}
-          </button>
           <button 
             onClick={() => setShowInviteForm(!showInviteForm)}
             className="px-4 py-2 bg-[rgb(var(--accent-primary))] rounded-lg hover:bg-[rgb(var(--accent-hover))] transition-colors"
@@ -322,24 +265,10 @@ function TeamManagementTab({ members, crewMembers, projectId }: { members: any[]
       </div>
 
       {/* Invite Form */}
-      {showInviteForm && (
+      {showInviteForm && !inviteLink && (
         <div className="bg-[rgb(var(--background-secondary))] border border-[rgb(var(--border-default))] rounded-lg p-6 mb-6">
           <h3 className="text-lg font-semibold text-text-primary mb-4">Invite Team Member</h3>
-          <form
-            onSubmit={(e) => {
-              e.preventDefault();
-              if (!inviteEmail) {
-                alert('Please enter an email address');
-                return;
-              }
-              addMember.mutate({
-                projectId,
-                userEmail: inviteEmail,
-                role: inviteRole,
-              });
-            }}
-            className="space-y-4"
-          >
+          <form onSubmit={handleAddMember} className="space-y-4">
             <div>
               <label className="block text-sm font-medium text-text-primary mb-2">
                 Email Address *
@@ -390,44 +319,56 @@ function TeamManagementTab({ members, crewMembers, projectId }: { members: any[]
                 className="px-4 py-2 bg-[rgb(var(--accent-primary))] rounded-lg hover:bg-[rgb(var(--accent-hover))] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 style={{ color: 'rgb(var(--colored-button-text))' }}
               >
-                {addMember.isPending ? 'Sending...' : 'Send Invitation'}
+                {addMember.isPending ? 'Creating...' : 'Create Invitation'}
               </button>
             </div>
           </form>
         </div>
       )}
 
-      {/* Members List */}
-      {(() => {
-        const pendingMembers = members.filter(m => m.status === 'pending');
-        return pendingMembers.length > 0 ? (
-          <div className="mb-4 flex items-center justify-between">
-            <div className="text-sm text-text-secondary">
-              {pendingMembers.length} pending invitation{pendingMembers.length !== 1 ? 's' : ''}
+      {/* Invite Success - Show Link */}
+      {inviteLink && (
+        <div className="bg-green-500/10 border-2 border-green-500/30 rounded-lg p-6 mb-6">
+          <div className="flex items-start gap-3 mb-4">
+            <div className="w-10 h-10 rounded-full bg-green-500/20 flex items-center justify-center flex-shrink-0">
+              <svg className="w-5 h-5 text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+              </svg>
             </div>
+            <div>
+              <h3 className="text-lg font-semibold text-green-400">Invitation Created!</h3>
+              <p className="text-text-secondary text-sm mt-1">
+                Share this link with your team member. They&apos;ll need to sign up or log in to accept.
+              </p>
+            </div>
+          </div>
+          
+          <div className="bg-background-primary border border-border-default rounded-lg p-3 flex items-center gap-3">
+            <input
+              type="text"
+              value={inviteLink}
+              readOnly
+              className="flex-1 bg-transparent text-text-primary text-sm font-mono outline-none"
+            />
             <button
-              onClick={() => {
-                if (confirm(`Activate all ${pendingMembers.length} pending invitation${pendingMembers.length !== 1 ? 's' : ''}? This will link their existing crew cards or create new ones if needed.`)) {
-                  activateAllPending.mutate({ projectId });
-                }
-              }}
-              disabled={activateAllPending.isPending}
-              className="px-4 py-2 bg-green-500/20 text-green-400 rounded-lg hover:bg-green-500/30 transition-colors text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+              onClick={handleCopyLink}
+              className="px-3 py-1.5 bg-accent-primary/20 text-accent-primary rounded-lg hover:bg-accent-primary/30 transition-colors text-sm font-medium whitespace-nowrap"
             >
-              {activateAllPending.isPending ? (
-                <>
-                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-green-400"></div>
-                  Activating...
-                </>
-              ) : (
-                <>
-                  ✓ Activate All ({pendingMembers.length})
-                </>
-              )}
+              {copiedLink ? '✓ Copied!' : 'Copy Link'}
             </button>
           </div>
-        ) : null;
-      })()}
+          
+          <div className="flex justify-end mt-4">
+            <button
+              onClick={handleCloseInviteSuccess}
+              className="px-4 py-2 bg-background-tertiary text-text-primary rounded-lg hover:bg-background-secondary transition-colors"
+            >
+              Done
+            </button>
+          </div>
+        </div>
+      )}
+
       <div className="space-y-3">
         {members.map((member) => (
           <div
@@ -436,7 +377,7 @@ function TeamManagementTab({ members, crewMembers, projectId }: { members: any[]
           >
             <div className="flex-1">
               <div className="flex items-center gap-3 mb-2">
-                <div className="text-lg font-medium text-text-primary">{member.userName}</div>
+                <div className="text-lg font-medium text-text-primary">{member.userName || member.userEmail}</div>
                 <span className={`px-2 py-1 rounded text-xs font-medium ${getRoleBadgeColor(member.role)}`}>
                   {getRoleDisplayName(member.role)}
                 </span>
@@ -448,28 +389,14 @@ function TeamManagementTab({ members, crewMembers, projectId }: { members: any[]
             </div>
 
             <div className="flex items-center gap-3">
-              {/* Pending members - show activate button */}
-              {member.status === 'pending' && (
-                <button
-                  onClick={() => {
-                    if (confirm(`Manually activate ${member.userName}? This will link their existing crew card or create one if needed.`)) {
-                      activateMember.mutate({ memberId: member.id, projectId });
-                    }
-                  }}
-                  className="px-3 py-1 bg-green-500/20 text-green-400 rounded hover:bg-green-500/30 transition-colors text-sm"
-                >
-                  Activate
-                </button>
-              )}
-
               {/* Active members - show admin toggle */}
-              {member.role !== 'owner' && member.status === 'active' && (
+              {member.role !== 'owner' && (
                 <>
                   <select
                     value={member.role}
                     onChange={(e) => {
                       const newRole = e.target.value as ProjectRole;
-                      if (confirm(`Change ${member.userName}'s role to ${getRoleDisplayName(newRole)}?`)) {
+                      if (confirm(`Change ${member.userName || member.userEmail}'s role to ${getRoleDisplayName(newRole)}?`)) {
                         updateRole.mutate({ id: member.id, role: newRole });
                       }
                     }}
@@ -481,7 +408,7 @@ function TeamManagementTab({ members, crewMembers, projectId }: { members: any[]
                   </select>
                   <button
                     onClick={() => {
-                      if (confirm(`Remove ${member.userName} from the project?`)) {
+                      if (confirm(`Remove ${member.userName || member.userEmail} from the project?`)) {
                         removeMember.mutate({ id: member.id });
                       }
                     }}
@@ -502,82 +429,6 @@ function TeamManagementTab({ members, crewMembers, projectId }: { members: any[]
       {members.length === 0 && (
         <div className="text-center py-12 text-text-secondary">No team members yet</div>
       )}
-
-      {/* Crew Members Without Team Accounts */}
-      {(() => {
-        // Get crew members without userIds and with email addresses
-        // Also check they're not already team members (by email)
-        const memberEmails = new Set(members.map(m => m.userEmail?.toLowerCase()).filter(Boolean));
-        const crewWithoutAccounts = crewMembers.filter(crew => 
-          !crew.userId && 
-          crew.email && 
-          crew.email.trim() &&
-          !memberEmails.has(crew.email.toLowerCase())
-        );
-
-        if (crewWithoutAccounts.length === 0) {
-          return null;
-        }
-
-        return (
-          <div className="mt-8 pt-8 border-t border-[rgb(var(--border-default))]">
-            <div className="flex justify-between items-center mb-4">
-              <div>
-                <h3 className="text-lg font-semibold text-text-primary mb-1">
-                  Invite Crew Members as Team Members
-                </h3>
-                <p className="text-sm text-text-secondary">
-                  {crewWithoutAccounts.length} crew member{crewWithoutAccounts.length !== 1 ? 's' : ''} without team accounts
-                </p>
-              </div>
-              <button
-                onClick={() => {
-                  if (confirm(`Send invitations to all ${crewWithoutAccounts.length} crew members?`)) {
-                    inviteFromCrewCards.mutate({ projectId });
-                  }
-                }}
-                disabled={inviteFromCrewCards.isPending}
-                className="px-4 py-2 bg-green-500/20 text-green-400 rounded-lg hover:bg-green-500/30 transition-colors disabled:opacity-50 text-sm font-medium"
-              >
-                {inviteFromCrewCards.isPending ? 'Sending...' : `📧 Invite All (${crewWithoutAccounts.length})`}
-              </button>
-            </div>
-
-            <div className="space-y-2 max-h-96 overflow-y-auto">
-              {crewWithoutAccounts.map((crew) => (
-                <div
-                  key={crew.id}
-                  className="bg-[rgb(var(--background-secondary))] border border-[rgb(var(--border-default))] rounded-lg p-3 flex items-center justify-between"
-                >
-                  <div className="flex-1">
-                    <div className="flex items-center gap-3 mb-1">
-                      <div className="text-sm font-medium text-text-primary">{crew.name}</div>
-                      <span className="px-2 py-0.5 rounded text-xs font-medium bg-cyan-500/20 text-cyan-400">
-                        {crew.department} • {crew.role}
-                      </span>
-                    </div>
-                    <div className="text-xs text-text-secondary">{crew.email}</div>
-                  </div>
-                  <button
-                    onClick={() => {
-                      if (confirm(`Send invitation to ${crew.name} (${crew.email})?`)) {
-                        inviteFromCrewCards.mutate({ 
-                          projectId,
-                          crewMemberIds: [crew.id]
-                        });
-                      }
-                    }}
-                    disabled={inviteFromCrewCards.isPending}
-                    className="px-3 py-1 bg-green-500/20 text-green-400 rounded hover:bg-green-500/30 transition-colors disabled:opacity-50 text-xs font-medium"
-                  >
-                    Invite
-                  </button>
-                </div>
-              ))}
-            </div>
-          </div>
-        );
-      })()}
     </div>
   );
 }
@@ -594,25 +445,7 @@ function DepartmentHeadsTab({
   departmentHeads: any[];
   activeMembers: any[];
 }) {
-  const utils = trpc.useUtils();
-  const assignHead = trpc.departmentHeads.assign.useMutation({
-    onSuccess: () => {
-      utils.departmentHeads.listByProject.invalidate({ projectId });
-      utils.projectMembers.listByProject.invalidate({ projectId });
-    },
-  });
-
-  const removeHead = trpc.departmentHeads.remove.useMutation({
-    onSuccess: () => {
-      console.log('Department head removed successfully, refreshing data...');
-      utils.departmentHeads.listByProject.invalidate({ projectId });
-      utils.projectMembers.listByProject.invalidate({ projectId });
-    },
-    onError: (error) => {
-      console.error('Remove department head error:', error);
-      alert(`Failed to remove department head: ${error.message}`);
-    },
-  });
+  const { assignHead, removeHead } = useDepartmentHeads(projectId);
 
   const getDepartmentHeads = (dept: string) => {
     return departmentHeads.filter((h) => h.department === dept);
@@ -660,7 +493,7 @@ function DepartmentHeadsTab({
                       <div>
                         <div className="text-sm font-medium text-text-primary">{head.userName}</div>
                         <div className="text-xs text-text-tertiary">
-                          Assigned {new Date(head.assignedAt).toLocaleDateString()}
+                          Assigned {head.assignedAt ? new Date(head.assignedAt.toDate()).toLocaleDateString() : 'Unknown'}
                         </div>
                       </div>
                     </div>
@@ -670,10 +503,9 @@ function DepartmentHeadsTab({
                           removeHead.mutate({ id: head.id });
                         }
                       }}
-                      disabled={removeHead.isPending}
                       className="px-3 py-1 bg-red-500/20 text-red-400 rounded hover:bg-red-500/30 transition-colors text-sm disabled:opacity-50 disabled:cursor-not-allowed"
                     >
-                      {removeHead.isPending ? 'Removing...' : 'Remove'}
+                      Remove
                     </button>
                   </div>
                 ))}
@@ -686,7 +518,7 @@ function DepartmentHeadsTab({
               <select
                 onChange={(e) => {
                   if (e.target.value) {
-                    const selectedMember = activeMembers.find((m) => m.userId === e.target.value);
+                    const selectedMember = activeMembers.find((m: any) => m.userId === e.target.value);
                     if (selectedMember) {
                       assignHead.mutate({
                         projectId,
@@ -701,7 +533,7 @@ function DepartmentHeadsTab({
                 className="w-full bg-[rgb(var(--background-tertiary))] border border-[rgb(var(--border-default))] rounded-lg px-4 py-2 text-text-primary"
               >
                 <option value="">Select team member...</option>
-                {availableMembers.map((member) => (
+                {availableMembers.map((member: any) => (
                   <option key={member.id} value={member.userId}>
                     {member.userName} ({member.userEmail})
                   </option>
@@ -733,14 +565,7 @@ function ProjectSettingsTab({ project, projectId }: { project: any; projectId: s
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(project?.coverImageUrl || null);
   
-  const utils = trpc.useUtils();
-  const updateProject = trpc.projects.update.useMutation({
-    onSuccess: () => {
-      utils.projects.getById.invalidate({ id: projectId });
-      setIsEditing(false);
-      setImageFile(null);
-    },
-  });
+  const { mutateAsync: updateProject } = useUpdateProject();
 
   const [formData, setFormData] = useState({
     title: project?.title || '',
@@ -791,7 +616,6 @@ function ProjectSettingsTab({ project, projectId }: { project: any; projectId: s
       // Upload new image if selected
       if (imageFile) {
         setUploadingImage(true);
-        const { uploadImage, generateUniqueFilename, deleteImage, isBlobUrl } = await import('@/lib/firebase/storage');
         const filename = generateUniqueFilename(imageFile.name);
         const storagePath = `projects/${projectId}/${filename}`;
         finalCoverImageUrl = await uploadImage(imageFile, storagePath);
@@ -803,7 +627,7 @@ function ProjectSettingsTab({ project, projectId }: { project: any; projectId: s
         }
       }
 
-      await updateProject.mutateAsync({
+      await updateProject({
         id: projectId,
         data: {
           title: formData.title,
@@ -816,6 +640,8 @@ function ProjectSettingsTab({ project, projectId }: { project: any; projectId: s
           coverImageUrl: finalCoverImageUrl || undefined,
         },
       });
+      setIsEditing(false);
+      setImageFile(null);
     } catch (error) {
       console.error('Error updating project:', error);
       alert('Failed to update project. Please try again.');
@@ -1085,7 +911,7 @@ function ProjectSettingsTab({ project, projectId }: { project: any; projectId: s
             type="button"
             onClick={handleCancel}
             className="px-4 py-2 bg-background-tertiary text-text-primary rounded-lg hover:bg-background-secondary transition-colors"
-            disabled={uploadingImage || updateProject.isPending}
+            disabled={uploadingImage}
           >
             Cancel
           </button>
@@ -1093,9 +919,9 @@ function ProjectSettingsTab({ project, projectId }: { project: any; projectId: s
             type="submit"
             className="px-4 py-2 bg-accent-primary rounded-lg hover:bg-accent-hover transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
             style={{ color: 'rgb(var(--colored-button-text))' }}
-            disabled={uploadingImage || updateProject.isPending}
+            disabled={uploadingImage}
           >
-            {uploadingImage ? 'Uploading...' : updateProject.isPending ? 'Saving...' : 'Save Changes'}
+            {uploadingImage ? 'Uploading...' : 'Save Changes'}
           </button>
         </div>
       </form>
@@ -1115,15 +941,8 @@ function RoleRequestsTab({
   userRole?: string | null;
   departmentHeads: any[];
 }) {
-  const { firebaseUser, user: firestoreUser } = useAuth();
-  const utils = trpc.useUtils();
-  const reviewRequest = trpc.roleRequests.review.useMutation({
-    onSuccess: () => {
-      utils.roleRequests.listByProject.invalidate({ projectId });
-      utils.roleRequests.getPendingCount.invalidate({ projectId });
-      utils.crew.listByProject.invalidate({ projectId });
-    },
-  });
+  const { firebaseUser } = useAuth();
+  const { reviewRequest } = useRoleRequests(projectId);
 
   const getStatusBadge = (status: string) => {
     switch (status) {
@@ -1234,7 +1053,6 @@ function RoleRequestsTab({
                         reviewNote: note || undefined,
                       });
                     }}
-                    disabled={reviewRequest.isPending}
                     className="flex-1 px-4 py-2 bg-green-500/20 text-green-400 rounded-lg hover:bg-green-500/30 transition-colors font-medium"
                   >
                     ✓ Approve
@@ -1248,7 +1066,6 @@ function RoleRequestsTab({
                         reviewNote: note || undefined,
                       });
                     }}
-                    disabled={reviewRequest.isPending}
                     className="flex-1 px-4 py-2 bg-red-500/20 text-red-400 rounded-lg hover:bg-red-500/30 transition-colors font-medium"
                   >
                     ✗ Deny
@@ -1308,4 +1125,3 @@ function RoleRequestsTab({
     </div>
   );
 }
-

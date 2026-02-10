@@ -4,7 +4,7 @@ import { signOut } from '@/lib/firebase/auth';
 import { useRouter, usePathname } from 'next/navigation';
 import { useAuth } from '@/features/auth/hooks/useAuth';
 import Link from 'next/link';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useThemeStore, themes, type ThemeId, darkModeAccents, type DarkModeAccent } from '@/lib/stores/themeStore';
 import { AccentColorIcons } from '@/lib/stores/themeIcons';
 import Image from 'next/image';
@@ -21,7 +21,25 @@ export function DashboardLayout({ children, fullWidth = false }: DashboardLayout
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [showThemeMenu, setShowThemeMenu] = useState(false);
   const [showDarkModeAccents, setShowDarkModeAccents] = useState(false);
+  const [showMobileMenu, setShowMobileMenu] = useState(false);
   const { currentTheme, setTheme, darkModeAccent, setDarkModeAccent } = useThemeStore();
+
+  // Close mobile menu on route change
+  useEffect(() => {
+    setShowMobileMenu(false);
+  }, [pathname]);
+
+  // Prevent body scroll when mobile menu is open
+  useEffect(() => {
+    if (showMobileMenu) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = '';
+    }
+    return () => {
+      document.body.style.overflow = '';
+    };
+  }, [showMobileMenu]);
 
   const handleSignOut = async () => {
     await signOut();
@@ -60,8 +78,25 @@ export function DashboardLayout({ children, fullWidth = false }: DashboardLayout
       <header className="sticky top-0 z-50 bg-background-primary/95 backdrop-blur-sm border-b border-border-subtle">
         <div className="px-4 sm:px-6 lg:px-6">
           <div className="flex justify-between items-center h-12">
-            {/* Logo & Nav */}
-            <div className="flex items-center gap-6">
+            {/* Mobile hamburger + Logo & Nav */}
+            <div className="flex items-center gap-4">
+              {/* Mobile Hamburger Button */}
+              <button
+                onClick={() => setShowMobileMenu(!showMobileMenu)}
+                className="md:hidden p-1.5 text-text-secondary hover:text-text-primary transition-colors"
+                aria-label="Toggle menu"
+              >
+                {showMobileMenu ? (
+                  <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                ) : (
+                  <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+                  </svg>
+                )}
+              </button>
+
               <Link href="/dashboard" className="flex items-center gap-2 group">
                 <div className="w-6 h-6 rounded-lg flex items-center justify-center group-hover:scale-105 transition-transform overflow-hidden">
                   <Image
@@ -72,12 +107,12 @@ export function DashboardLayout({ children, fullWidth = false }: DashboardLayout
                     className="object-contain"
                   />
                 </div>
-                <span className="text-lg font-bold text-text-primary group-hover:text-accent-primary transition-colors">
+                <span className="text-lg font-bold text-text-primary group-hover:text-accent-primary transition-colors hidden sm:inline">
                   DoubleCheck
                 </span>
               </Link>
               
-              <nav className="hidden md:flex gap-1">
+              <nav className="hidden md:flex gap-1 ml-2">
                 {navigation.map((item) => (
                   <Link
                     key={item.name}
@@ -313,12 +348,126 @@ export function DashboardLayout({ children, fullWidth = false }: DashboardLayout
         </div>
       </header>
 
+      {/* Mobile Menu Overlay */}
+      {showMobileMenu && (
+        <div className="fixed inset-0 z-40 md:hidden">
+          {/* Backdrop */}
+          <div 
+            className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+            onClick={() => setShowMobileMenu(false)}
+          />
+          
+          {/* Menu Panel */}
+          <div className="absolute left-0 top-12 bottom-0 w-72 bg-background-primary border-r border-border-default overflow-y-auto animate-in slide-in-from-left duration-200">
+            <div className="p-4">
+              {/* User Info */}
+              <div className="flex items-center gap-3 p-3 mb-4 bg-background-secondary rounded-lg">
+                <div className="w-10 h-10 rounded-full bg-gradient-primary flex items-center justify-center text-white font-semibold">
+                  {user?.displayName?.charAt(0) || user?.email?.charAt(0) || 'U'}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-text-primary truncate">
+                    {user?.displayName || 'User'}
+                  </p>
+                  <p className="text-xs text-text-tertiary truncate">{user?.email}</p>
+                </div>
+              </div>
+
+              {/* Navigation */}
+              <nav className="space-y-1 mb-6">
+                {navigation.map((item) => (
+                  <Link
+                    key={item.name}
+                    href={item.href}
+                    onClick={() => setShowMobileMenu(false)}
+                    className={`flex items-center gap-3 px-4 py-3 rounded-lg text-base font-medium transition-all ${
+                      isActive(item.href)
+                        ? 'bg-accent-primary/10 text-accent-primary'
+                        : 'text-text-secondary hover:text-text-primary hover:bg-background-secondary'
+                    }`}
+                  >
+                    {item.icon}
+                    {item.name}
+                  </Link>
+                ))}
+              </nav>
+
+              {/* Divider */}
+              <div className="border-t border-border-subtle my-4" />
+
+              {/* Quick Actions */}
+              <div className="space-y-1">
+                <Link
+                  href="/settings"
+                  onClick={() => setShowMobileMenu(false)}
+                  className="flex items-center gap-3 px-4 py-3 rounded-lg text-base font-medium text-text-secondary hover:text-text-primary hover:bg-background-secondary transition-all"
+                >
+                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                  </svg>
+                  Settings
+                </Link>
+                <button
+                  onClick={() => {
+                    setShowMobileMenu(false);
+                    handleSignOut();
+                  }}
+                  className="flex items-center gap-3 px-4 py-3 rounded-lg text-base font-medium text-error hover:bg-error/10 transition-all w-full"
+                >
+                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                  </svg>
+                  Sign Out
+                </button>
+              </div>
+
+              {/* Theme Switcher (Simplified for mobile) */}
+              <div className="mt-6 pt-4 border-t border-border-subtle">
+                <p className="text-xs font-semibold text-text-tertiary uppercase tracking-wider mb-3 px-4">
+                  Theme
+                </p>
+                <div className="grid grid-cols-2 gap-2 px-4">
+                  <button
+                    onClick={() => {
+                      setTheme('light');
+                    }}
+                    className={`flex items-center justify-center gap-2 px-3 py-2.5 rounded-lg text-sm font-medium transition-all ${
+                      currentTheme === 'light'
+                        ? 'bg-accent-primary text-white'
+                        : 'bg-background-secondary text-text-secondary hover:bg-background-tertiary'
+                    }`}
+                  >
+                    {themes.light.icon}
+                    Light
+                  </button>
+                  <button
+                    onClick={() => {
+                      setTheme('dark');
+                    }}
+                    className={`flex items-center justify-center gap-2 px-3 py-2.5 rounded-lg text-sm font-medium transition-all ${
+                      currentTheme === 'dark'
+                        ? 'bg-accent-primary'
+                        : 'bg-background-secondary text-text-secondary hover:bg-background-tertiary'
+                    }`}
+                    style={currentTheme === 'dark' ? { color: 'rgb(var(--colored-button-text))' } : undefined}
+                  >
+                    {themes.dark.icon}
+                    Dark
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Main Content */}
-      <main className={fullWidth ? '' : 'max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8'}>
+      <main className={fullWidth ? '' : 'max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 md:py-8'}>
         {children}
       </main>
 
-      {/* Click outside to close menus */}
+      {/* Click outside to close dropdown menus (not mobile menu - it has its own backdrop) */}
       {(showUserMenu || showThemeMenu || showDarkModeAccents) && (
         <div
           className="fixed inset-0 z-40"

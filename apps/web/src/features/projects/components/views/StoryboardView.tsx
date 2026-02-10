@@ -1,12 +1,13 @@
 'use client';
 
-import React, { useState, useMemo, useRef } from 'react';
+import React, { useState, useMemo, useRef, useEffect } from 'react';
 import Image from 'next/image';
 import { useScenesByProject as useScenes } from '@/features/scenes/hooks/useScenes';
 import { useProjectShots } from '@/features/scenes/hooks/useProjectShots';
 import { ShotDetailModal } from '@/features/scenes/components/ShotDetailModal';
 import { ShotViewModal } from '@/features/scenes/components/ShotViewModal';
 import { CoverageTemplateModal } from '@/features/scenes/components/CoverageTemplateModal';
+import { AnnotationTools } from '@/features/scenes/components/AnnotationTools';
 import { useApplyCoverageTemplate } from '@/features/scenes/hooks/useCoverageTemplates';
 import { isFirebaseStorageUrl, uploadImage } from '@/lib/firebase/storage';
 import { useAuth } from '@/features/auth/hooks/useAuth';
@@ -42,7 +43,27 @@ export function StoryboardView({ projectId }: StoryboardViewProps) {
   const [showSlideshow, setShowSlideshow] = useState(false);
   const [slideshowShotIndex, setSlideshowShotIndex] = useState(0);
   const [activeSlideshowSceneId, setActiveSlideshowSceneId] = useState<string | null>(null);
-  const [showReferenceGallery, setShowReferenceGallery] = useState(true);
+  // Default to collapsed on mobile, expanded on desktop
+  const [showReferenceGallery, setShowReferenceGallery] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
+  
+  // Set initial state based on screen size
+  useEffect(() => {
+    const checkMobile = () => {
+      const mobile = window.innerWidth < 768;
+      setIsMobile(mobile);
+      // Only set default on initial load, not on resize
+    };
+    
+    checkMobile();
+    // Set desktop default on first render
+    if (window.innerWidth >= 768) {
+      setShowReferenceGallery(true);
+    }
+    
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
   
   const [showReferenceCategoryModal, setShowReferenceCategoryModal] = useState(false);
   const [pendingReferenceUrl, setPendingReferenceUrl] = useState<string | null>(null);
@@ -53,6 +74,8 @@ export function StoryboardView({ projectId }: StoryboardViewProps) {
   const [draggedReference, setDraggedReference] = useState<string | null>(null);
   const [showCoverageModal, setShowCoverageModal] = useState(false);
   const [selectedSceneForCoverage, setSelectedSceneForCoverage] = useState<any | null>(null);
+  const [showAnnotationTools, setShowAnnotationTools] = useState(false);
+  const [annotationShot, setAnnotationShot] = useState<Shot | null>(null);
 
   // Group shots by scene with master/coverage hierarchy
   const shotsByScene = useMemo(() => {
@@ -329,16 +352,18 @@ export function StoryboardView({ projectId }: StoryboardViewProps) {
   }
 
   return (
-    <div className="flex h-full overflow-hidden">
-      <div className="flex-1 overflow-y-auto p-8 relative">
-        <div className="flex justify-between items-center mb-6">
-          <div>
-            <h1 className="text-3xl font-bold mb-1 text-text-primary">Storyboards</h1>
-            <p className="text-text-secondary">Visual planning and shot lists</p>
+    <div className="flex h-full overflow-hidden relative">
+      <div className="flex-1 overflow-y-auto p-4 md:p-8 relative">
+        {/* Header - Mobile optimized */}
+        <div className="flex items-start justify-between gap-2 mb-4 md:mb-6">
+          <div className="flex-1 min-w-0">
+            <h1 className="text-xl md:text-3xl font-bold text-text-primary">Storyboards</h1>
+            <p className="text-sm md:text-base text-text-secondary">Visual planning</p>
           </div>
+          {/* Toggle References Panel - Desktop only */}
           <button
             onClick={() => setShowReferenceGallery(!showReferenceGallery)}
-            className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+            className={`hidden md:flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium transition-colors flex-shrink-0 ${
               showReferenceGallery 
                 ? 'bg-accent-primary' 
                 : 'bg-background-secondary text-text-secondary hover:bg-background-tertiary'
@@ -348,17 +373,22 @@ export function StoryboardView({ projectId }: StoryboardViewProps) {
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
             </svg>
-            {showReferenceGallery ? 'Hide References' : 'Show References'}
+            {showReferenceGallery ? 'Hide' : 'Show'} References
           </button>
         </div>
 
-        <div className="space-y-12 pb-20">
+        <div className="space-y-8 md:space-y-12 pb-20">
           {scenes.map(scene => (
-            <div key={scene.id} className="space-y-4">
-              <div className="flex items-center gap-4 border-b border-border-subtle pb-2 sticky top-0 bg-background-primary z-10 pt-2">
-                <h2 className="text-xl font-bold text-text-primary">Scene {scene.sceneNumber}</h2>
-                <span className="text-text-secondary text-sm truncate max-w-md">{scene.title}</span>
-                <div className="ml-auto flex items-center gap-2">
+            <div key={scene.id} className="space-y-3 md:space-y-4">
+              {/* Scene Header - Mobile stacked, Desktop inline */}
+              <div className="border-b border-border-subtle pb-2 sticky top-0 bg-background-primary z-10 pt-2">
+                <div className="flex items-center justify-between gap-2 mb-2">
+                  <div className="flex items-center gap-2 min-w-0 flex-1">
+                    <h2 className="text-base md:text-xl font-bold text-text-primary whitespace-nowrap">Scene {scene.sceneNumber}</h2>
+                    <span className="text-text-secondary text-xs md:text-sm truncate">{scene.title}</span>
+                  </div>
+                  {/* Desktop actions */}
+                  <div className="hidden md:flex items-center gap-2">
                     <button 
                       onClick={() => openSlideshow(scene.id)}
                       className="text-xs bg-background-tertiary text-text-secondary hover:text-text-primary px-2 py-1 rounded hover:bg-background-elevated transition-colors flex items-center gap-1"
@@ -383,9 +413,9 @@ export function StoryboardView({ projectId }: StoryboardViewProps) {
                         setShowCoverageModal(true);
                       }}
                       className="text-xs bg-purple-500/10 text-purple-400 px-2 py-1 rounded hover:bg-purple-500/20 transition-colors font-medium"
-                      title="Apply coverage template to create multiple shots at once"
+                      title="Apply coverage template"
                     >
-                      📋 Apply Coverage
+                      📋 Coverage
                     </button>
                     <button 
                       onClick={() => {
@@ -394,13 +424,49 @@ export function StoryboardView({ projectId }: StoryboardViewProps) {
                       }}
                       className="text-xs text-text-secondary hover:text-text-primary px-2 py-1 rounded hover:bg-background-tertiary transition-colors"
                     >
-                      Manage List
+                      Manage
                     </button>
+                  </div>
+                </div>
+                {/* Mobile actions - horizontal scroll */}
+                <div className="flex md:hidden gap-2 overflow-x-auto scrollbar-hide pb-1">
+                  <button 
+                    onClick={() => handleCreateShot(scene.id)}
+                    className="text-xs bg-accent-primary text-white px-2.5 py-1.5 rounded font-medium flex-shrink-0"
+                  >
+                    + Shot
+                  </button>
+                  <button 
+                    onClick={() => openSlideshow(scene.id)}
+                    className="text-xs bg-background-secondary text-text-secondary px-2.5 py-1.5 rounded flex items-center gap-1 flex-shrink-0"
+                    disabled={!shotsByScene[scene.id]?.length}
+                  >
+                    ▶ Play
+                  </button>
+                  <button 
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setSelectedSceneForCoverage(scene);
+                      setShowCoverageModal(true);
+                    }}
+                    className="text-xs bg-background-secondary text-text-secondary px-2.5 py-1.5 rounded flex-shrink-0"
+                  >
+                    📋 Coverage
+                  </button>
+                  <button 
+                    onClick={() => {
+                        setDetailSceneId(scene.id);
+                        setShowShotDetailModal(true);
+                    }}
+                    className="text-xs bg-background-secondary text-text-secondary px-2.5 py-1.5 rounded flex-shrink-0"
+                  >
+                    ⚙ Manage
+                  </button>
                 </div>
               </div>
 
               <div 
-                className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-6 min-h-[100px]"
+                className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3 md:gap-4 min-h-[80px]"
                 onDragOver={(e) => {
                     e.preventDefault();
                     const type = e.dataTransfer.getData('type') || (draggedReference ? 'reference' : draggedShot ? 'shot' : '');
@@ -485,6 +551,18 @@ export function StoryboardView({ projectId }: StoryboardViewProps) {
                                   </svg>
                               )}
                           </label>
+                          {shot.imageUrl && (
+                            <button 
+                                onClick={() => {
+                                    setAnnotationShot(shot);
+                                    setShowAnnotationTools(true);
+                                }}
+                                className="p-2 bg-white/10 hover:bg-white/20 rounded-full text-white transition-colors"
+                                title="Annotate Image"
+                            >
+                                ✏️
+                            </button>
+                          )}
                           <button 
                               onClick={() => openSlideshow(scene.id, index)}
                               className="p-2 bg-white/10 hover:bg-white/20 rounded-full text-white transition-colors"
@@ -594,8 +672,57 @@ export function StoryboardView({ projectId }: StoryboardViewProps) {
         </div>
       </div>
 
-      {/* Reference Gallery Sidebar */}
-      {showReferenceGallery && (
+      {/* Mobile Reference Toggle FAB */}
+      <button
+        onClick={() => setShowReferenceGallery(true)}
+        className="md:hidden fixed bottom-20 right-4 z-30 w-14 h-14 bg-accent-primary rounded-full shadow-lg flex items-center justify-center"
+        style={{ color: 'rgb(var(--colored-button-text))' }}
+        aria-label="Open references"
+      >
+        <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+        </svg>
+      </button>
+
+      {/* Reference Gallery Sidebar - Mobile Overlay */}
+      {showReferenceGallery && isMobile && (
+        <div className="fixed inset-0 z-50 md:hidden">
+          <div 
+            className="absolute inset-0 bg-black/60" 
+            onClick={() => setShowReferenceGallery(false)} 
+          />
+          <div className="absolute right-0 top-0 bottom-0 w-72 max-w-[90vw] bg-background-secondary border-l border-border-subtle animate-in slide-in-from-right flex flex-col">
+            <div className="flex items-center justify-between p-4 border-b border-border-subtle">
+              <h3 className="font-semibold text-text-primary">References</h3>
+              <button
+                onClick={() => setShowReferenceGallery(false)}
+                className="p-2 text-text-secondary hover:text-text-primary rounded-lg hover:bg-background-tertiary"
+              >
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            <div className="flex-1 overflow-hidden">
+              <ReferenceGallery 
+                projectId={projectId} 
+                onDragStart={onReferenceDragStart}
+                onViewShot={(shotId, sceneId) => {
+                  const shot = shots.find(s => s.id === shotId);
+                  if (shot) {
+                    setSelectedShot(shot);
+                    setShowShotViewModal(true);
+                    setShowReferenceGallery(false);
+                  }
+                }}
+              />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Reference Gallery Sidebar - Desktop */}
+      {showReferenceGallery && !isMobile && (
         <ReferenceGallery 
             projectId={projectId} 
             onDragStart={onReferenceDragStart}
@@ -763,6 +890,33 @@ export function StoryboardView({ projectId }: StoryboardViewProps) {
           onClose={() => {
             setShowCoverageModal(false);
             setSelectedSceneForCoverage(null);
+          }}
+        />
+      )}
+
+      {/* Annotation Tools */}
+      {showAnnotationTools && annotationShot?.imageUrl && (
+        <AnnotationTools
+          imageUrl={annotationShot.imageUrl}
+          onSave={async (annotatedImageData) => {
+            // Convert data URL to blob for upload
+            const response = await fetch(annotatedImageData);
+            const blob = await response.blob();
+            const file = new File([blob], `annotated-${Date.now()}.png`, { type: 'image/png' });
+            
+            // Upload the annotated image
+            const path = `projects/${projectId}/shots/${annotationShot.id}/annotated-${Date.now()}.png`;
+            const downloadURL = await uploadImage(file, path);
+            
+            // Update the shot with the new image
+            await updateShot.mutateAsync({
+              id: annotationShot.id,
+              data: { imageUrl: downloadURL }
+            });
+          }}
+          onClose={() => {
+            setShowAnnotationTools(false);
+            setAnnotationShot(null);
           }}
         />
       )}

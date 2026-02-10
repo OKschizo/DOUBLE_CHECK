@@ -3,13 +3,14 @@
   "version": "0.0.0",
   "private": true,
   "scripts": {
-    "build": "turbo build",
+    "build": "turbo build --filter=!//",
     "dev": "turbo dev",
     "lint": "turbo lint",
     "format": "prettier --write \"**/*.{ts,tsx,md}\"",
     "clean": "turbo clean && rm -rf node_modules",
     "type-check": "turbo type-check",
     "deploy": "vercel --prod",
+    "deploy:firebase": "turbo build && firebase deploy",
     "deploy:rules": "firebase deploy --only firestore,storage",
     "deploy:firestore": "firebase deploy --only firestore",
     "deploy:storage": "firebase deploy --only storage"
@@ -25,6 +26,7 @@
     "node": ">=18.0.0",
     "pnpm": ">=8.0.0"
   },
+  "packageManager": "pnpm@10.15.1",
   "dependencies": {
     "superjson": "^2.2.5"
   }

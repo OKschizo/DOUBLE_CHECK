@@ -1,7 +1,10 @@
 'use client';
 
 import { useState } from 'react';
-import { trpc } from '@/lib/trpc/client';
+import { useCrewByProject } from '@/features/crew/hooks/useCrew';
+import { useCastByProject } from '@/features/cast/hooks/useCast';
+import { useEquipmentByProject } from '@/features/equipment/hooks/useEquipment';
+import { useLocationsByProject } from '@/features/locations/hooks/useLocations';
 import type { BudgetItem } from '@/lib/schemas';
 
 interface BudgetLinkModalProps {
@@ -20,10 +23,10 @@ export function BudgetLinkModal({ projectId, budgetItem, onClose, onLink }: Budg
   const [linkType, setLinkType] = useState<'crew' | 'equipment' | 'location' | 'cast'>('crew');
   const [selectedId, setSelectedId] = useState<string>('');
 
-  const { data: crewMembers = [] } = trpc.crew.listByProject.useQuery({ projectId });
-  const { data: equipment = [] } = trpc.equipment.listByProject.useQuery({ projectId });
-  const { data: locations = [] } = trpc.locations.listByProject.useQuery({ projectId });
-  const { data: castMembers = [] } = trpc.cast.listByProject.useQuery({ projectId });
+  const { data: crewMembers = [] } = useCrewByProject(projectId);
+  const { data: castMembers = [] } = useCastByProject(projectId);
+  const { data: equipment = [] } = useEquipmentByProject(projectId);
+  const { data: locations = [] } = useLocationsByProject(projectId);
 
   const handleLink = () => {
     if (!selectedId) return;
