@@ -3,7 +3,7 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { ThemeIcons } from './themeIcons';
 
-export type ThemeId = 'purple' | 'cinematic' | 'teal' | 'crimson' | 'sage' | 'light' | 'dark';
+export type ThemeId = 'purple' | 'cinematic' | 'teal' | 'crimson' | 'sage' | 'blue' | 'light' | 'dark';
 
 export type DarkModeAccent = 'green' | 'blue' | 'purple' | 'red' | 'yellow' | 'orange' | 'cyan';
 
@@ -216,6 +216,28 @@ export const themes: Record<ThemeId, Theme> = {
       textPrimary: '252 245 248',
       textSecondary: '163 145 151',
       textTertiary: '122 105 111',
+    },
+  },
+  blue: {
+    id: 'blue',
+    name: 'Navy Blue',
+    icon: ThemeIcons.blue,
+    gradient: 'radial-gradient(circle at 20% 30%, rgba(181, 255, 0, 0.06), transparent 50%)',
+    colors: {
+      backgroundPrimary: '15 23 53',
+      backgroundSecondary: '24 31 69',
+      backgroundTertiary: '30 41 90',
+      backgroundElevated: '40 51 100',
+      accentPrimary: '181 255 0',
+      accentSecondary: '218 255 128',
+      accentHover: '200 240 0',
+      accentFocus: '160 220 0',
+      borderSubtle: '30 41 90',
+      borderDefault: '51 65 120',
+      borderEmphasis: '71 85 140',
+      textPrimary: '226 232 240',
+      textSecondary: '148 163 184',
+      textTertiary: '100 116 139',
     },
   },
   sage: {

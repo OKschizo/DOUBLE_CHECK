@@ -365,8 +365,8 @@ git push origin feature/my-feature
 
 - **[ARCHITECTURE.md](ARCHITECTURE.md)** - Complete architecture documentation
 - **[CODEBASE_MAP.md](CODEBASE_MAP.md)** - Code structure and patterns
-- **[TRPC_AUDIT.md](TRPC_AUDIT.md)** - Migration history (tRPC → Firebase)
-- **[REFACTOR_PLAN.md](REFACTOR_PLAN.md)** - Historical refactor notes
+- **[API_ROUTES.md](API_ROUTES.md)** - API routes reference
+- **[docs/](docs/)** - Firebase setup and deployment guides
 
 ---
 

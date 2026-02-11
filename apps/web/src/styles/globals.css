@@ -67,22 +67,22 @@
 }
 
 @layer components {
-  /* Card Styles - Auto Finance inspired */
+  /* Card Styles - Maxton-inspired with our colors */
   .card {
     @apply bg-background-primary border border-border-subtle;
-    border-radius: 0px;
+    border-radius: 1rem;
     transition: all 0.2s ease;
   }
   
   .card-elevated {
     @apply bg-background-primary border border-border-default;
-    border-radius: 0px;
+    border-radius: 1rem;
     transition: all 0.2s ease;
   }
   
   .card-hover {
     @apply transition-all duration-200;
-    border-radius: 0px;
+    border-radius: 1rem;
   }
   
   .card-hover:hover {
@@ -90,34 +90,53 @@
     box-shadow: 0 0 0 1px rgb(var(--accent-primary) / 0.1);
   }
   
-  /* Button Styles - Auto Finance inspired */
+  /* Button Styles - Maxton gradient style using our accent colors */
+  .btn-grd-primary {
+    background: linear-gradient(135deg, rgb(var(--accent-primary)) 0%, rgb(var(--accent-secondary)) 100%);
+    transition: all 0.2s ease;
+    box-shadow: 0 2px 8px rgb(var(--accent-primary) / 0.25);
+  }
+  
+  .btn-grd-primary:hover {
+    background: linear-gradient(135deg, rgb(var(--accent-hover)) 0%, rgb(var(--accent-primary)) 100%);
+    box-shadow: 0 4px 12px rgb(var(--accent-primary) / 0.35);
+    transform: translateY(-1px);
+  }
+  
+  .btn-grd-primary:active {
+    transform: translateY(0);
+  }
+  
   .btn-primary {
-    @apply px-4 py-2 font-bold transition-all duration-200;
-    @apply bg-accent-primary hover:bg-accent-hover;
-    @apply active:scale-95;
+    @apply px-4 py-2 font-semibold transition-all duration-200 active:scale-[0.98];
+    background: linear-gradient(135deg, rgb(var(--accent-primary)) 0%, rgb(var(--accent-secondary)) 100%);
     color: rgb(var(--button-text-on-accent, 255 255 255));
-    border-radius: 0px;
+    border-radius: 0.75rem;
     font-size: 14px;
-    font-weight: 700;
+    box-shadow: 0 2px 8px rgb(var(--accent-primary) / 0.25);
+  }
+  
+  .btn-primary:hover {
+    background: linear-gradient(135deg, rgb(var(--accent-hover)) 0%, rgb(var(--accent-primary)) 100%);
+    box-shadow: 0 4px 12px rgb(var(--accent-primary) / 0.35);
   }
   
   .btn-secondary {
     @apply px-4 py-2 font-medium transition-all duration-200;
     @apply bg-background-primary text-accent-secondary;
-    @apply border border-border-default hover:border-accent-primary;
-    @apply hover:bg-accent-primary/5 active:scale-95;
-    border-radius: 0px;
-    font-size: 16px;
-    font-weight: 400;
+    @apply border border-border-default hover:border-accent-primary/50;
+    @apply hover:bg-accent-primary/10 active:scale-[0.98];
+    border-radius: 0.75rem;
+    font-size: 14px;
   }
   
-  /* Input Styles - Auto Finance inspired */
+  /* Input Styles */
   .input-field {
     @apply w-full px-4 py-3 transition-all duration-200;
     @apply bg-background-primary border border-border-default;
     @apply text-text-primary placeholder:text-text-tertiary;
-    @apply focus:outline-none focus:ring-2 focus:ring-accent-primary focus:border-accent-primary;
-    border-radius: 0px;
+    @apply focus:outline-none focus:ring-2 focus:ring-accent-primary/50 focus:border-accent-primary;
+    border-radius: 0.75rem;
   }
   
   .input-field:hover {
@@ -126,7 +145,8 @@
   
   /* Badge Styles */
   .badge {
-    @apply px-3 py-1 rounded-full text-xs font-medium;
+    @apply px-3 py-1 text-xs font-medium;
+    border-radius: 0.5rem;
   }
   
   .badge-primary {

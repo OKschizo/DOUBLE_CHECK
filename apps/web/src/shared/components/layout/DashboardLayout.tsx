@@ -14,6 +14,12 @@ interface DashboardLayoutProps {
   fullWidth?: boolean;
 }
 
+const navItems = [
+  { name: 'Dashboard', href: '/dashboard', icon: 'M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z' },
+  { name: 'Projects', href: '/projects', icon: 'M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10' },
+  { name: 'Settings', href: '/settings', icon: 'M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z M15 12a3 3 0 11-6 0 3 3 0 016 0z' },
+];
+
 export function DashboardLayout({ children, fullWidth = false }: DashboardLayoutProps) {
   const { user } = useAuth();
   const router = useRouter();
@@ -21,51 +27,21 @@ export function DashboardLayout({ children, fullWidth = false }: DashboardLayout
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [showThemeMenu, setShowThemeMenu] = useState(false);
   const [showDarkModeAccents, setShowDarkModeAccents] = useState(false);
-  const [showMobileMenu, setShowMobileMenu] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const { currentTheme, setTheme, darkModeAccent, setDarkModeAccent } = useThemeStore();
 
-  // Close mobile menu on route change
-  useEffect(() => {
-    setShowMobileMenu(false);
-  }, [pathname]);
+  useEffect(() => { setSidebarOpen(false); }, [pathname]);
 
-  // Prevent body scroll when mobile menu is open
   useEffect(() => {
-    if (showMobileMenu) {
-      document.body.style.overflow = 'hidden';
-    } else {
-      document.body.style.overflow = '';
-    }
-    return () => {
-      document.body.style.overflow = '';
-    };
-  }, [showMobileMenu]);
+    if (sidebarOpen) document.body.style.overflow = 'hidden';
+    else document.body.style.overflow = '';
+    return () => { document.body.style.overflow = ''; };
+  }, [sidebarOpen]);
 
   const handleSignOut = async () => {
     await signOut();
     router.push('/');
   };
-
-  const navigation = [
-    { 
-      name: 'Dashboard', 
-      href: '/dashboard', 
-      icon: (
-        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-        </svg>
-      )
-    },
-    { 
-      name: 'Projects', 
-      href: '/projects', 
-      icon: (
-        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
-        </svg>
-      )
-    },
-  ];
 
   const isActive = (href: string) => {
     if (href === '/dashboard') return pathname === '/dashboard';
@@ -73,217 +49,83 @@ export function DashboardLayout({ children, fullWidth = false }: DashboardLayout
   };
 
   return (
-    <div className="min-h-screen bg-background-primary">
-      {/* Enhanced Header */}
-      <header className="sticky top-0 z-50 bg-background-primary/95 backdrop-blur-sm border-b border-border-subtle">
-        <div className="px-4 sm:px-6 lg:px-6">
-          <div className="flex justify-between items-center h-12">
-            {/* Mobile hamburger + Logo & Nav */}
-            <div className="flex items-center gap-4">
-              {/* Mobile Hamburger Button */}
-              <button
-                onClick={() => setShowMobileMenu(!showMobileMenu)}
-                className="md:hidden p-1.5 text-text-secondary hover:text-text-primary transition-colors"
-                aria-label="Toggle menu"
-              >
-                {showMobileMenu ? (
-                  <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                ) : (
-                  <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
-                  </svg>
-                )}
-              </button>
-
-              <Link href="/dashboard" className="flex items-center gap-2 group">
-                <div className="w-6 h-6 rounded-lg flex items-center justify-center group-hover:scale-105 transition-transform overflow-hidden">
-                  <Image
-                    src={currentTheme === 'dark' ? '/logo_dark.png' : '/logo_light.png'}
-                    alt="DoubleCheck Logo"
-                    width={24}
-                    height={24}
-                    className="object-contain"
-                  />
-                </div>
-                <span className="text-lg font-bold text-text-primary group-hover:text-accent-primary transition-colors hidden sm:inline">
-                  DoubleCheck
-                </span>
-              </Link>
-              
-              <nav className="hidden md:flex gap-1 ml-2">
-                {navigation.map((item) => (
-                  <Link
-                    key={item.name}
-                    href={item.href}
-                    className={`px-3 py-1.5 text-sm font-medium transition-all flex items-center gap-1.5 ${
-                      isActive(item.href)
-                        ? 'bg-accent-primary/10 text-accent-primary border-b-2 border-accent-primary'
-                        : 'text-text-secondary hover:text-text-primary hover:bg-accent-primary/5'
-                    }`}
-                  >
-                    {item.icon}
-                    {item.name}
-                  </Link>
-                ))}
-              </nav>
+    <div className="min-h-screen bg-background-primary flex">
+      {/* Sidebar - Maxton-style vertical menu */}
+      <aside className={`fixed lg:static inset-y-0 left-0 z-40 w-64 flex flex-col bg-background-secondary border-r border-border-subtle transition-transform lg:translate-x-0 ${sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}`}>
+        <div className="flex items-center justify-between h-14 px-4 border-b border-border-subtle shrink-0">
+          <Link href="/dashboard" className="flex items-center gap-3 group">
+            <div className="w-8 h-8 rounded-xl flex items-center justify-center overflow-hidden bg-background-elevated">
+              <Image src={currentTheme === 'dark' || currentTheme === 'blue' ? '/logo_dark.png' : '/logo_light.png'} alt="DoubleCheck" width={28} height={28} className="object-contain" />
             </div>
+            <span className="font-semibold text-text-primary group-hover:text-accent-primary transition-colors">DoubleCheck</span>
+          </Link>
+          <button onClick={() => setSidebarOpen(false)} className="lg:hidden p-2 text-text-secondary hover:text-text-primary rounded-lg hover:bg-background-tertiary" aria-label="Close menu">
+            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+          </button>
+        </div>
 
-            {/* User Menu */}
-            <div className="flex items-center gap-3">
-              <button className="p-1.5 text-text-secondary hover:text-text-primary transition-colors hover:bg-accent-primary/5">
-                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
-                </svg>
-              </button>
+        <nav className="flex-1 overflow-y-auto py-4 px-3 space-y-1">
+          <p className="px-3 mb-2 text-[10px] font-semibold uppercase tracking-wider text-text-tertiary">Main</p>
+          {navItems.map((item) => (
+            <Link key={item.name} href={item.href} onClick={() => setSidebarOpen(false)}
+              className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all ${
+                isActive(item.href) ? 'bg-accent-primary/15 text-accent-primary' : 'text-text-secondary hover:text-text-primary hover:bg-background-tertiary'
+              }`}>
+              <svg className="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={item.icon} /></svg>
+              {item.name}
+            </Link>
+          ))}
 
-              {/* Theme Switcher */}
-              <div className="relative">
-                <button
-                  onClick={() => setShowThemeMenu(!showThemeMenu)}
-                  className="flex items-center gap-1.5 p-1.5 text-text-secondary hover:text-text-primary transition-colors hover:bg-accent-primary/5"
-                  title="Change theme"
-                >
-                  {themes[currentTheme].icon}
-                </button>
-
-                {showThemeMenu && (
-                  <div className="absolute right-0 mt-2 w-64 bg-background-primary border border-border-default shadow-xl py-2 animate-in fade-in slide-in-from-top-2 duration-200 z-50">
-                    <div className="px-4 py-2 border-b border-border-subtle">
-                      <p className="text-xs font-semibold text-text-tertiary uppercase tracking-wider">
-                        Quick Select
-                      </p>
-                    </div>
-                    <div className="py-2 px-4">
-                      <div className="grid grid-cols-2 gap-2">
-                        {/* Light Mode */}
-                        <button
-                          onClick={() => {
-                            setTheme('light');
-                            setShowThemeMenu(false);
-                            setShowDarkModeAccents(false);
-                          }}
-                            className={`flex items-center justify-center gap-2 px-3 py-2 text-sm font-medium transition-all ${
-                              currentTheme === 'light'
-                                ? 'bg-accent-primary text-white shadow-md'
-                                : 'bg-background-primary text-text-secondary hover:text-text-primary hover:bg-accent-primary/5 border border-border-default'
-                            }`}
-                        >
-                          <span className="w-4 h-4 flex items-center justify-center">{themes.light.icon}</span>
-                          <span>{themes.light.name.replace(' Mode', '')}</span>
-                        </button>
-                        
-                        {/* Dark Mode with accent selector */}
-                        <div className="relative">
-                          <button
-                            onClick={() => {
-                              if (currentTheme !== 'dark') {
-                                setTheme('dark');
-                              }
-                              setShowDarkModeAccents(!showDarkModeAccents);
-                            }}
-                            className={`w-full flex items-center justify-center gap-2 px-3 py-2 text-sm font-medium transition-all ${
-                              currentTheme === 'dark'
-                                ? 'bg-accent-primary shadow-md'
-                                : 'bg-background-primary text-text-secondary hover:text-text-primary hover:bg-accent-primary/5 border border-border-default'
-                            }`}
-                            style={currentTheme === 'dark' ? { color: 'rgb(var(--colored-button-text))' } : undefined}
-                          >
-                            <span className="w-4 h-4 flex items-center justify-center">{themes.dark.icon}</span>
-                            <span>{themes.dark.name.replace(' Mode', '')}</span>
-                            {currentTheme === 'dark' && (
-                              <svg 
-                                className={`w-3 h-3 transition-transform ${showDarkModeAccents ? 'rotate-180' : ''}`}
-                                fill="none" 
-                                viewBox="0 0 24 24" 
-                                stroke="currentColor"
-                              >
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                              </svg>
-                            )}
-                          </button>
-                          
-                          {/* Dark Mode Accent Color Submenu */}
-                          {showDarkModeAccents && currentTheme === 'dark' && (
-                            <div className="absolute left-full ml-2 top-0 w-48 bg-background-primary border border-border-default shadow-xl py-2 z-50">
-                              <div className="px-3 py-1.5 border-b border-border-subtle">
-                                <p className="text-xs font-semibold text-text-tertiary uppercase tracking-wider">
-                                  Accent Color
-                                </p>
-                              </div>
-                              <div className="py-1">
-                                {(Object.keys(darkModeAccents) as DarkModeAccent[]).map((accent) => (
-                                  <button
-                                    key={accent}
-                                    onClick={() => {
-                                      setDarkModeAccent(accent);
-                                      setShowDarkModeAccents(false);
-                                    }}
-                                    className={`w-full flex items-center gap-3 px-3 py-2 text-sm transition-colors ${
-                                      darkModeAccent === accent
-                                        ? 'bg-accent-primary/10 text-accent-primary'
-                                        : 'text-text-secondary hover:text-text-primary hover:bg-accent-primary/5'
-                                    }`}
-                                  >
-                                    <span className="w-4 h-4 flex items-center justify-center">
-                                      {AccentColorIcons[accent]}
-                                    </span>
-                                    <span className="font-medium capitalize">{accent}</span>
-                                    {darkModeAccent === accent && (
-                                      <svg className="w-4 h-4 ml-auto" fill="currentColor" viewBox="0 0 20 20">
-                                        <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                                      </svg>
-                                    )}
-                                  </button>
-                                ))}
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                    
-                    <div className="px-4 py-2 border-t border-border-subtle">
-                      <p className="text-xs font-semibold text-text-tertiary uppercase tracking-wider mb-2">
-                        Themed Modes
-                      </p>
-                    </div>
-                    <div className="py-1">
-                      {Object.values(themes).filter(t => t.id !== 'light' && t.id !== 'dark').map((theme) => (
-                        <button
-                          key={theme.id}
-                          onClick={() => {
-                            setTheme(theme.id);
-                            setShowThemeMenu(false);
-                            setShowDarkModeAccents(false);
-                          }}
-                          className={`w-full flex items-center gap-3 px-4 py-2.5 text-sm transition-colors ${
-                            currentTheme === theme.id
-                              ? 'bg-accent-primary/10 text-accent-primary'
-                              : 'text-text-secondary hover:text-text-primary hover:bg-accent-primary/5'
-                          }`}
-                        >
-                          <span className="w-4 h-4 flex items-center justify-center">{theme.icon}</span>
-                          <span className="font-medium">{theme.name}</span>
-                          {currentTheme === theme.id && (
-                            <svg className="w-4 h-4 ml-auto" fill="currentColor" viewBox="0 0 20 20">
-                              <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                            </svg>
-                          )}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                )}
+          <div className="pt-6 mt-4 border-t border-border-subtle">
+            <p className="px-3 mb-2 text-[10px] font-semibold uppercase tracking-wider text-text-tertiary">Theme</p>
+            <div className="grid grid-cols-2 gap-2 px-2">
+              <button onClick={() => { setTheme('light'); setShowThemeMenu(false); setShowDarkModeAccents(false); }} className={`flex items-center justify-center gap-2 px-2 py-2 rounded-xl text-xs font-medium transition-all ${currentTheme === 'light' ? 'btn-grd-primary' : 'bg-background-tertiary text-text-secondary hover:text-text-primary'}`} style={currentTheme === 'light' ? { color: 'rgb(var(--button-text-on-accent))' } : undefined}>{themes.light.icon}<span>Light</span></button>
+              <button onClick={() => { setTheme('dark'); setShowDarkModeAccents(!showDarkModeAccents); }} className={`flex items-center justify-center gap-2 px-2 py-2 rounded-xl text-xs font-medium transition-all ${currentTheme === 'dark' ? 'btn-grd-primary' : 'bg-background-tertiary text-text-secondary hover:text-text-primary'}`} style={currentTheme === 'dark' ? { color: 'rgb(var(--colored-button-text))' } : undefined}>{themes.dark.icon}<span>Dark</span></button>
+            </div>
+            {showDarkModeAccents && currentTheme === 'dark' && (
+              <div className="mt-2 px-2 space-y-1">
+                {(Object.keys(darkModeAccents) as DarkModeAccent[]).map((accent) => (
+                  <button key={accent} onClick={() => setDarkModeAccent(accent)} className={`w-full flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs ${darkModeAccent === accent ? 'bg-accent-primary/15 text-accent-primary' : 'text-text-secondary hover:bg-background-tertiary'}`}>
+                    {AccentColorIcons[accent]}<span className="capitalize">{accent}</span>
+                  </button>
+                ))}
               </div>
+            )}
+            <div className="mt-2 px-2">
+              {Object.values(themes).filter(t => !['light','dark'].includes(t.id)).map((theme) => (
+                <button key={theme.id} onClick={() => { setTheme(theme.id); setShowDarkModeAccents(false); }} className={`w-full flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-medium ${currentTheme === theme.id ? 'bg-accent-primary/15 text-accent-primary' : 'text-text-secondary hover:bg-background-tertiary'}`}>
+                  {theme.icon}<span>{theme.name}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        </nav>
+      </aside>
 
-              <div className="relative">
+      {/* Overlay for mobile */}
+      {sidebarOpen && <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-30 lg:hidden" onClick={() => setSidebarOpen(false)} aria-hidden="true" />}
+
+      {/* Main wrapper */}
+      <div className="flex-1 flex flex-col min-w-0">
+        {/* Header */}
+        <header className="sticky top-0 z-20 h-14 flex items-center justify-between px-4 lg:px-6 bg-background-primary/95 backdrop-blur-sm border-b border-border-subtle shrink-0">
+          <button onClick={() => setSidebarOpen(true)} className="lg:hidden p-2 text-text-secondary hover:text-text-primary rounded-xl hover:bg-background-tertiary" aria-label="Open menu">
+            <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" /></svg>
+          </button>
+
+          <div className="flex-1" />
+
+          <div className="flex items-center gap-2">
+            <button className="p-2 text-text-secondary hover:text-text-primary rounded-xl hover:bg-background-tertiary transition-colors" title="Notifications">
+              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" /></svg>
+            </button>
+
+            <div className="relative">
                 <button
                   onClick={() => setShowUserMenu(!showUserMenu)}
-                  className="flex items-center gap-2 px-2 py-1 hover:bg-accent-primary/5 transition-colors"
+                  className="flex items-center gap-2 px-2 py-1.5 rounded-xl hover:bg-background-tertiary transition-colors"
                 >
-                  <div className="w-7 h-7 rounded-full bg-gradient-primary flex items-center justify-center text-white text-xs font-semibold">
+                  <div className="w-8 h-8 rounded-xl flex items-center justify-center text-xs font-bold shrink-0 btn-grd-primary" style={{ color: 'rgb(var(--button-text-on-accent))' }}>
                     {user?.displayName?.charAt(0) || user?.email?.charAt(0) || 'U'}
                   </div>
                   <div className="hidden md:block text-left">
@@ -299,7 +141,7 @@ export function DashboardLayout({ children, fullWidth = false }: DashboardLayout
 
                 {/* Dropdown Menu */}
                 {showUserMenu && (
-                  <div className="absolute right-0 mt-2 w-56 bg-background-primary border border-border-default shadow-xl py-2 animate-in fade-in slide-in-from-top-2 duration-200">
+                  <div className="absolute right-0 mt-2 w-56 bg-background-primary border border-border-default shadow-xl py-2 rounded-xl animate-in fade-in slide-in-from-top-2 duration-200">
                     <div className="px-4 py-3 border-b border-border-subtle">
                       <p className="text-sm font-medium text-text-primary truncate">
                         {user?.email}
@@ -342,140 +184,21 @@ export function DashboardLayout({ children, fullWidth = false }: DashboardLayout
                     </div>
                   </div>
                 )}
-              </div>
             </div>
           </div>
-        </div>
-      </header>
+        </header>
 
-      {/* Mobile Menu Overlay */}
-      {showMobileMenu && (
-        <div className="fixed inset-0 z-40 md:hidden">
-          {/* Backdrop */}
-          <div 
-            className="absolute inset-0 bg-black/60 backdrop-blur-sm"
-            onClick={() => setShowMobileMenu(false)}
-          />
-          
-          {/* Menu Panel */}
-          <div className="absolute left-0 top-12 bottom-0 w-72 bg-background-primary border-r border-border-default overflow-y-auto animate-in slide-in-from-left duration-200">
-            <div className="p-4">
-              {/* User Info */}
-              <div className="flex items-center gap-3 p-3 mb-4 bg-background-secondary rounded-lg">
-                <div className="w-10 h-10 rounded-full bg-gradient-primary flex items-center justify-center text-white font-semibold">
-                  {user?.displayName?.charAt(0) || user?.email?.charAt(0) || 'U'}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-text-primary truncate">
-                    {user?.displayName || 'User'}
-                  </p>
-                  <p className="text-xs text-text-tertiary truncate">{user?.email}</p>
-                </div>
-              </div>
+        {/* Main Content */}
+        <main className={`flex-1 ${fullWidth ? '' : 'max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 md:py-8'}`}>
+          {children}
+        </main>
+      </div>
 
-              {/* Navigation */}
-              <nav className="space-y-1 mb-6">
-                {navigation.map((item) => (
-                  <Link
-                    key={item.name}
-                    href={item.href}
-                    onClick={() => setShowMobileMenu(false)}
-                    className={`flex items-center gap-3 px-4 py-3 rounded-lg text-base font-medium transition-all ${
-                      isActive(item.href)
-                        ? 'bg-accent-primary/10 text-accent-primary'
-                        : 'text-text-secondary hover:text-text-primary hover:bg-background-secondary'
-                    }`}
-                  >
-                    {item.icon}
-                    {item.name}
-                  </Link>
-                ))}
-              </nav>
-
-              {/* Divider */}
-              <div className="border-t border-border-subtle my-4" />
-
-              {/* Quick Actions */}
-              <div className="space-y-1">
-                <Link
-                  href="/settings"
-                  onClick={() => setShowMobileMenu(false)}
-                  className="flex items-center gap-3 px-4 py-3 rounded-lg text-base font-medium text-text-secondary hover:text-text-primary hover:bg-background-secondary transition-all"
-                >
-                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                  </svg>
-                  Settings
-                </Link>
-                <button
-                  onClick={() => {
-                    setShowMobileMenu(false);
-                    handleSignOut();
-                  }}
-                  className="flex items-center gap-3 px-4 py-3 rounded-lg text-base font-medium text-error hover:bg-error/10 transition-all w-full"
-                >
-                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-                  </svg>
-                  Sign Out
-                </button>
-              </div>
-
-              {/* Theme Switcher (Simplified for mobile) */}
-              <div className="mt-6 pt-4 border-t border-border-subtle">
-                <p className="text-xs font-semibold text-text-tertiary uppercase tracking-wider mb-3 px-4">
-                  Theme
-                </p>
-                <div className="grid grid-cols-2 gap-2 px-4">
-                  <button
-                    onClick={() => {
-                      setTheme('light');
-                    }}
-                    className={`flex items-center justify-center gap-2 px-3 py-2.5 rounded-lg text-sm font-medium transition-all ${
-                      currentTheme === 'light'
-                        ? 'bg-accent-primary text-white'
-                        : 'bg-background-secondary text-text-secondary hover:bg-background-tertiary'
-                    }`}
-                  >
-                    {themes.light.icon}
-                    Light
-                  </button>
-                  <button
-                    onClick={() => {
-                      setTheme('dark');
-                    }}
-                    className={`flex items-center justify-center gap-2 px-3 py-2.5 rounded-lg text-sm font-medium transition-all ${
-                      currentTheme === 'dark'
-                        ? 'bg-accent-primary'
-                        : 'bg-background-secondary text-text-secondary hover:bg-background-tertiary'
-                    }`}
-                    style={currentTheme === 'dark' ? { color: 'rgb(var(--colored-button-text))' } : undefined}
-                  >
-                    {themes.dark.icon}
-                    Dark
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Main Content */}
-      <main className={fullWidth ? '' : 'max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 md:py-8'}>
-        {children}
-      </main>
-
-      {/* Click outside to close dropdown menus (not mobile menu - it has its own backdrop) */}
-      {(showUserMenu || showThemeMenu || showDarkModeAccents) && (
+      {/* Click outside to close user dropdown */}
+      {showUserMenu && (
         <div
           className="fixed inset-0 z-40"
-          onClick={() => {
-            setShowUserMenu(false);
-            setShowThemeMenu(false);
-            setShowDarkModeAccents(false);
-          }}
+          onClick={() => setShowUserMenu(false)}
         />
       )}
     </div>

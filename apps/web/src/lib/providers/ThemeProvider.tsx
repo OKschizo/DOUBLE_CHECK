@@ -11,7 +11,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     const theme = themes[currentTheme];
     const root = document.documentElement;
 
-    // Apply all theme colors as CSS variables
+    // Apply all theme colors as CSS variables (including blue theme)
     // Backgrounds
     root.style.setProperty('--background-primary', theme.colors.backgroundPrimary);
     root.style.setProperty('--background-secondary', theme.colors.backgroundSecondary);
@@ -50,21 +50,20 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     }
     
     // Set button text color on accent background
-    // Light mode: blue background needs white text
-    // Dark mode: bright accent colors need black text (except for very dark accents)
     if (currentTheme === 'light') {
-      root.style.setProperty('--button-text-on-accent', '255 255 255'); // White for blue background
-      root.style.setProperty('--colored-button-text', '255 255 255'); // White for colored buttons in light mode
+      root.style.setProperty('--button-text-on-accent', '255 255 255');
+      root.style.setProperty('--colored-button-text', '255 255 255');
     } else if (currentTheme === 'dark') {
-      // For dark mode, check if accent is bright enough for black text
       const accentColors = darkModeAccents[darkModeAccent];
       const [r, g, b] = accentColors.accentPrimary.split(' ').map(Number);
-      // Calculate luminance - if bright enough, use black text
       const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
       root.style.setProperty('--button-text-on-accent', luminance > 0.5 ? '0 0 0' : '255 255 255');
-      root.style.setProperty('--colored-button-text', '0 0 0'); // Black for colored buttons in dark mode
+      root.style.setProperty('--colored-button-text', '0 0 0');
+    } else if (currentTheme === 'blue') {
+      // Navy theme: bright green accent needs black text
+      root.style.setProperty('--button-text-on-accent', '0 0 0');
+      root.style.setProperty('--colored-button-text', '0 0 0');
     } else {
-      // For other themes, use white text as default
       root.style.setProperty('--button-text-on-accent', '255 255 255');
       root.style.setProperty('--colored-button-text', '255 255 255');
     }
