@@ -73,7 +73,7 @@ export default function NewProjectPage() {
 
           {/* Form */}
           <form onSubmit={handleSubmit} className="space-y-6">
-            <div className="card-elevated p-8 space-y-6">
+            <div className="card card-elevated p-8 rounded-2xl space-y-6">
               {/* Title */}
               <div>
                 <label htmlFor="title" className="block text-sm font-medium mb-2 text-text-secondary">

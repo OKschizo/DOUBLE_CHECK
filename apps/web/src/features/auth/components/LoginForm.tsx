@@ -43,9 +43,9 @@ export function LoginForm() {
   };
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4 w-full max-w-md">
+    <form onSubmit={handleSubmit} className="space-y-4 w-full">
       <div>
-        <label htmlFor="email" className="block text-sm font-medium mb-2">
+        <label htmlFor="email" className="block text-sm font-medium text-text-primary mb-2">
           Email
         </label>
         <input
@@ -54,13 +54,13 @@ export function LoginForm() {
           value={email}
           onChange={(e) => setEmail(e.target.value)}
           required
-          className="w-full px-4 py-2 bg-background-tertiary border border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-accent-primary"
+          className="input-field"
           placeholder="you@example.com"
         />
       </div>
 
       <div>
-        <label htmlFor="password" className="block text-sm font-medium mb-2">
+        <label htmlFor="password" className="block text-sm font-medium text-text-primary mb-2">
           Password
         </label>
         <input
@@ -69,13 +69,13 @@ export function LoginForm() {
           value={password}
           onChange={(e) => setPassword(e.target.value)}
           required
-          className="w-full px-4 py-2 bg-background-tertiary border border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-accent-primary"
+          className="input-field"
           placeholder="••••••••"
         />
       </div>
 
       {error && (
-        <div className="p-3 bg-red-500/10 border border-red-500 rounded-lg text-red-500 text-sm">
+        <div className="p-3 bg-error/10 border border-error rounded-xl text-error text-sm">
           {error}
         </div>
       )}
@@ -83,18 +83,18 @@ export function LoginForm() {
       <button
         type="submit"
         disabled={loading}
-        className="w-full py-3 bg-accent-primary rounded-lg hover:bg-accent-hover transition-colors disabled:opacity-50 disabled:cursor-not-allowed font-medium"
-        style={{ color: 'rgb(var(--colored-button-text))' }}
+        className="w-full py-3 btn-primary disabled:opacity-50 disabled:cursor-not-allowed"
+        style={{ color: 'rgb(var(--button-text-on-accent))' }}
       >
         {loading ? 'Signing in...' : 'Sign In'}
       </button>
 
       <div className="relative my-6">
         <div className="absolute inset-0 flex items-center">
-          <div className="w-full border-t border-gray-700"></div>
+          <div className="w-full border-t border-border-default"></div>
         </div>
         <div className="relative flex justify-center text-sm">
-          <span className="px-2 bg-background-primary text-text-secondary">Or continue with</span>
+          <span className="px-2 bg-background-primary text-text-tertiary">Or continue with</span>
         </div>
       </div>
 
@@ -102,7 +102,7 @@ export function LoginForm() {
         type="button"
         onClick={handleGoogleSignIn}
         disabled={loading}
-        className="w-full py-3 bg-white text-gray-900 rounded-lg hover:bg-gray-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed font-medium flex items-center justify-center gap-3"
+        className="w-full py-3 btn-secondary rounded-xl flex items-center justify-center gap-3"
       >
         <svg className="w-5 h-5" viewBox="0 0 24 24">
           <path

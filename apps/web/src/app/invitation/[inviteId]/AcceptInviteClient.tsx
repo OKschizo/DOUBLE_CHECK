@@ -77,14 +77,15 @@ export default function AcceptInviteClient() {
 
   if (error) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-background-primary">
-        <div className="max-w-md text-center p-8 bg-background-secondary rounded-lg border border-gray-800">
+      <div className="flex min-h-screen items-center justify-center bg-background-primary p-6">
+        <div className="card max-w-md text-center p-8 rounded-2xl border border-border-default">
           <div className="text-5xl mb-4">❌</div>
-          <h1 className="text-2xl font-bold mb-4 text-red-500">Invitation Error</h1>
+          <h1 className="text-2xl font-bold mb-4 text-error">Invitation Error</h1>
           <p className="text-text-secondary mb-6">{error}</p>
           <button
             onClick={() => router.push('/dashboard')}
-            className="px-6 py-3 bg-accent-primary text-white rounded-lg hover:bg-accent-hover transition-colors"
+            className="btn-primary px-6 py-3"
+            style={{ color: 'rgb(var(--button-text-on-accent))' }}
           >
             Go to Dashboard
           </button>
@@ -94,10 +95,10 @@ export default function AcceptInviteClient() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background-primary">
-      <div className="max-w-md text-center p-8 bg-background-secondary rounded-lg border border-gray-800">
+    <div className="flex min-h-screen items-center justify-center bg-background-primary p-6">
+      <div className="card max-w-md text-center p-8 rounded-2xl border border-border-default">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-accent-primary mx-auto mb-4"></div>
-        <h1 className="text-3xl font-bold mb-4">Accepting Invitation...</h1>
+        <h1 className="text-xl font-bold mb-4 text-text-primary">Accepting Invitation...</h1>
         <p className="text-text-secondary">
           Processing your invitation...
         </p>

@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from 'next';
 import { Space_Grotesk } from 'next/font/google';
 import '../styles/globals.css';
 import { ThemeProvider } from '@/lib/providers/ThemeProvider';
+import { SidebarProvider } from '@/lib/contexts/SidebarContext';
 
 const spaceGrotesk = Space_Grotesk({ 
   subsets: ['latin'],
@@ -35,7 +36,9 @@ export default function RootLayout({
     <html lang="en">
       <body className={spaceGrotesk.className}>
         <ThemeProvider>
-          {children}
+          <SidebarProvider>
+            {children}
+          </SidebarProvider>
         </ThemeProvider>
       </body>
     </html>

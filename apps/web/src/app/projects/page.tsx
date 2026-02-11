@@ -23,7 +23,8 @@ export default function ProjectsPage() {
               <CloneDemoButton />
               <Link
                 href="/projects/new"
-                className="px-6 py-3 bg-accent-primary text-white rounded-lg hover:bg-accent-hover transition-colors font-medium whitespace-nowrap"
+                className="btn-primary px-6 py-3 whitespace-nowrap"
+                style={{ color: 'rgb(var(--button-text-on-accent))' }}
               >
                 + New Project
               </Link>

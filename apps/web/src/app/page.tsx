@@ -2,24 +2,25 @@ import Link from 'next/link';
 
 export default function HomePage() {
   return (
-    <main className="flex min-h-screen flex-col items-center justify-center p-24">
-      <div className="text-center">
-        <h1 className="text-6xl font-bold mb-4">
+    <main className="flex min-h-screen flex-col items-center justify-center p-6 sm:p-24 bg-background-primary">
+      <div className="text-center max-w-2xl">
+        <h1 className="text-4xl sm:text-6xl font-bold mb-4 text-text-primary">
           <span className="text-accent-primary">DoubleCheck</span>
         </h1>
-        <p className="text-xl text-text-secondary mb-8">
+        <p className="text-lg sm:text-xl text-text-secondary mb-8">
           Film Production Management Platform
         </p>
-        <div className="flex gap-4 justify-center">
+        <div className="flex flex-wrap gap-4 justify-center">
           <Link
             href="/login"
-            className="px-6 py-3 bg-accent-primary text-white rounded-lg hover:bg-accent-hover transition-colors"
+            className="btn-primary px-6 py-3"
+            style={{ color: 'rgb(var(--button-text-on-accent))' }}
           >
             Get Started
           </Link>
           <Link
             href="/about"
-            className="px-6 py-3 bg-background-tertiary text-text-primary rounded-lg hover:bg-background-secondary transition-colors"
+            className="btn-secondary px-6 py-3"
           >
             Learn More
           </Link>

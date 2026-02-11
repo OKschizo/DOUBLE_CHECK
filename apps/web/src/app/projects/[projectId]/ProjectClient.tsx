@@ -2,9 +2,10 @@
 
 import { ProtectedRoute } from '@/shared/components/layout/ProtectedRoute';
 import { DashboardLayout } from '@/shared/components/layout/DashboardLayout';
+import { useSidebarProject } from '@/lib/contexts/SidebarContext';
 import { useParams, useRouter } from 'next/navigation';
 import { useProject } from '@/features/projects/hooks/useProjects';
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import Link from 'next/link';
 
 // Import view components
@@ -148,25 +149,11 @@ export default function ProjectClient() {
   const router = useRouter();
   const projectId = params.projectId as string;
   const [activeView, setActiveView] = useState('overview');
-  const [showMobileSidebar, setShowMobileSidebar] = useState(false);
+  const { setSidebarProject } = useSidebarProject();
 
-  // Handle view change - close mobile sidebar when view changes
   const handleViewChange = useCallback((viewId: string) => {
     setActiveView(viewId);
-    setShowMobileSidebar(false);
   }, []);
-
-  // Prevent body scroll when mobile sidebar is open
-  useEffect(() => {
-    if (showMobileSidebar) {
-      document.body.style.overflow = 'hidden';
-    } else {
-      document.body.style.overflow = '';
-    }
-    return () => {
-      document.body.style.overflow = '';
-    };
-  }, [showMobileSidebar]);
 
   // Read view from URL hash on mount and handle element selection
   useEffect(() => {
@@ -216,15 +203,39 @@ export default function ProjectClient() {
   }, []);
 
   const { data: project, isLoading, error } = useProject(projectId);
-  // Use simple project membership check for now, refine later
-  const userRole = 'owner'; // Placeholder until projectMembers refactor
+  const userRole = 'owner';
   const isRoleLoading = false;
 
-  // Redirect if user doesn't have access
-  useEffect(() => {
-    if (!isLoading && !project) {
-      router.push('/dashboard');
+  // Build flat sidebar items for consolidated nav (with dynamic labels)
+  const sidebarItems = useMemo(() => {
+    const flat: { id: string; name: string; icon: React.ReactNode }[] = [];
+    navigationSections.forEach((section) => {
+      section.items.forEach((item) => {
+        const displayName = item.id === 'cast' ? getCastLabel(project?.projectType) : item.id === 'scenes' ? getProjectTerminology(project?.projectType).scenes.label : item.name;
+        flat.push({ id: item.id, name: displayName, icon: item.icon });
+      });
+    });
+    if (userRole === 'owner' || userRole === 'admin' || userRole === 'dept_head') {
+      flat.push({ id: 'admin', name: 'Admin', icon: navigationIcons.admin });
     }
+    return flat;
+  }, [project?.projectType, userRole]);
+
+  // Register project nav in shared sidebar; clear on unmount
+  useEffect(() => {
+    if (!project || !projectId) return;
+    setSidebarProject({
+      projectId,
+      projectTitle: project.title,
+      activeView,
+      items: sidebarItems,
+      onNavigate: handleViewChange,
+    });
+    return () => setSidebarProject(null);
+  }, [project, projectId, activeView, sidebarItems, handleViewChange, setSidebarProject]);
+
+  useEffect(() => {
+    if (!isLoading && !project) router.push('/dashboard');
   }, [project, isLoading, router]);
 
   if (isLoading || isRoleLoading) {
@@ -296,141 +307,11 @@ export default function ProjectClient() {
     }
   };
 
-  // Sidebar content - shared between desktop and mobile
-  const sidebarContent = (
-    <div className="p-4">
-      {/* Project Header */}
-      <div className="mb-6 pb-4 border-b border-border-subtle">
-        <Link href="/dashboard" className="text-xs text-text-tertiary hover:text-accent-primary transition-colors flex items-center gap-1 mb-3">
-          <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-          </svg>
-          Back to Dashboard
-        </Link>
-        <div className="text-xs font-semibold text-text-tertiary mb-1 uppercase tracking-wider">
-          Project
-        </div>
-        <div className="text-sm font-bold text-text-primary truncate" title={project.title}>
-          {project.title}
-        </div>
-        <div className="text-xs text-text-tertiary mt-1">{project.client}</div>
-      </div>
-
-      {/* Navigation Sections */}
-      <nav className="space-y-6">
-        {navigationSections.map((section) => (
-          <div key={section.title}>
-            <div className="text-xs font-semibold text-text-tertiary mb-2 uppercase tracking-wider">
-              {section.title}
-            </div>
-            <div className="space-y-1">
-              {section.items.map((item) => {
-                // Dynamically update cast label based on project type
-                const displayName = item.id === 'cast' 
-                  ? getCastLabel(project?.projectType)
-                  : item.id === 'scenes'
-                  ? getProjectTerminology(project?.projectType).scenes.label
-                  : item.name;
-                
-                return (
-                  <button
-                    key={item.id}
-                    onClick={() => handleViewChange(item.id)}
-                    className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all ${
-                      activeView === item.id
-                        ? 'bg-accent-primary/10 text-accent-primary'
-                        : 'text-text-secondary hover:text-text-primary hover:bg-background-tertiary'
-                    }`}
-                  >
-                    {item.icon}
-                    <span>{displayName}</span>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        ))}
-      </nav>
-
-      {/* Settings & Admin */}
-      <div className="mt-6 pt-6 border-t border-border-subtle">
-        <div className="text-xs font-semibold text-text-tertiary mb-2 uppercase tracking-wider">
-          SETTINGS
-        </div>
-        <div className="space-y-1">
-          {/* Admin Button - Visible to owner/admin/dept_head */}
-          {(userRole === 'owner' || userRole === 'admin' || userRole === 'dept_head') && (
-            <button
-              onClick={() => handleViewChange('admin')}
-              className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all ${
-                activeView === 'admin'
-                  ? 'bg-accent-primary/10 text-accent-primary'
-                  : 'text-text-secondary hover:text-text-primary hover:bg-background-tertiary'
-              }`}
-            >
-              {navigationIcons.admin}
-              <span>Admin</span>
-            </button>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-
   return (
     <ProtectedRoute>
-      <DashboardLayout fullWidth={true}>
-        <div className="flex h-[calc(100vh-4rem)]">
-          {/* Mobile Sidebar Toggle Button - Fixed at bottom */}
-          <button
-            onClick={() => setShowMobileSidebar(true)}
-            className="md:hidden fixed bottom-4 left-4 z-30 w-14 h-14 bg-accent-primary rounded-full shadow-lg flex items-center justify-center transition-transform hover:scale-105 active:scale-95"
-            style={{ color: 'rgb(var(--colored-button-text))' }}
-            aria-label="Open navigation"
-          >
-            <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
-            </svg>
-          </button>
-
-          {/* Mobile Sidebar Overlay */}
-          {showMobileSidebar && (
-            <div className="fixed inset-0 z-40 md:hidden">
-              {/* Backdrop */}
-              <div 
-                className="absolute inset-0 bg-black/60 backdrop-blur-sm"
-                onClick={() => setShowMobileSidebar(false)}
-              />
-              
-              {/* Sidebar Panel */}
-              <aside className="absolute left-0 top-0 bottom-0 w-72 bg-background-secondary border-r border-border-subtle overflow-y-auto animate-in slide-in-from-left duration-200">
-                {/* Close Button */}
-                <div className="flex items-center justify-between p-4 border-b border-border-subtle">
-                  <span className="text-sm font-semibold text-text-primary">Navigation</span>
-                  <button
-                    onClick={() => setShowMobileSidebar(false)}
-                    className="p-2 text-text-secondary hover:text-text-primary transition-colors rounded-lg hover:bg-background-tertiary"
-                    aria-label="Close navigation"
-                  >
-                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                    </svg>
-                  </button>
-                </div>
-                {sidebarContent}
-              </aside>
-            </div>
-          )}
-
-          {/* Desktop Sidebar - Hidden on mobile */}
-          <aside className="hidden md:block w-56 bg-background-secondary border-r border-border-subtle overflow-y-auto flex-shrink-0">
-            {sidebarContent}
-          </aside>
-
-          {/* Main Content Area */}
-          <main className="flex-1 overflow-y-auto bg-background-primary">
-            {renderView()}
-          </main>
+      <DashboardLayout fullWidth>
+        <div className="min-h-[calc(100vh-4rem)] overflow-y-auto">
+          {renderView()}
         </div>
       </DashboardLayout>
     </ProtectedRoute>

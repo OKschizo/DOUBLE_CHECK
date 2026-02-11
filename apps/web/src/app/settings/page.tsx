@@ -158,7 +158,7 @@ export default function SettingsPage() {
           </div>
 
           {successMessage && (
-            <div className="mb-6 p-4 bg-green-500/10 border border-green-500/30 rounded-lg text-green-500">
+            <div className="mb-6 p-4 bg-success/10 border border-success/30 rounded-xl text-success">
               {successMessage}
             </div>
           )}
@@ -168,7 +168,7 @@ export default function SettingsPage() {
             <div className="lg:col-span-2">
               <form onSubmit={handleSubmit} className="space-y-6">
                 {/* Profile Photo */}
-                <div className="card-elevated p-6">
+                <div className="card card-elevated p-6 rounded-2xl">
                   <h2 className="text-xl font-bold mb-4 text-text-primary">Profile Photo</h2>
                   <div className="flex items-start gap-6">
                     <div className="flex-shrink-0">
@@ -192,7 +192,7 @@ export default function SettingsPage() {
                         type="file"
                         accept="image/*"
                         onChange={handlePhotoChange}
-                        className="block w-full text-sm text-text-secondary file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-accent-primary file:text-white hover:file:bg-accent-hover file:cursor-pointer"
+                        className="block w-full text-sm text-text-secondary file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-sm file:font-semibold file:bg-accent-primary file:text-white hover:file:bg-accent-hover file:cursor-pointer"
                       />
                       <p className="text-xs text-text-tertiary mt-2">JPG, PNG or GIF. Max size 5MB.</p>
                     </div>
@@ -200,57 +200,57 @@ export default function SettingsPage() {
                 </div>
 
                 {/* Basic Information */}
-                <div className="card-elevated p-6">
+                <div className="card card-elevated p-6 rounded-2xl">
                   <h2 className="text-xl font-bold mb-4 text-text-primary">Basic Information</h2>
                   <div className="space-y-4">
                     <div>
-                      <label className="block text-sm font-medium text-text-secondary mb-2">
+                      <label className="block text-sm font-medium text-text-primary mb-2">
                         Display Name
                       </label>
                       <input
                         type="text"
                         value={formData.displayName}
                         onChange={(e) => setFormData({ ...formData, displayName: e.target.value })}
-                        className="w-full px-4 py-2 bg-background-secondary border border-border-default rounded-lg text-text-primary focus:outline-none focus:ring-2 focus:ring-accent-primary"
+                        className="input-field"
                         required
                       />
                     </div>
 
                     <div>
-                      <label className="block text-sm font-medium text-text-secondary mb-2">
+                      <label className="block text-sm font-medium text-text-primary mb-2">
                         Email
                       </label>
                       <input
                         type="email"
                         value={profile?.email || ''}
                         disabled
-                        className="w-full px-4 py-2 bg-background-tertiary border border-border-default rounded-lg text-text-tertiary cursor-not-allowed"
+                        className="input-field bg-background-tertiary cursor-not-allowed opacity-80"
                       />
                       <p className="text-xs text-text-tertiary mt-1">Email cannot be changed</p>
                     </div>
 
                     <div>
-                      <label className="block text-sm font-medium text-text-secondary mb-2">
+                      <label className="block text-sm font-medium text-text-primary mb-2">
                         Bio
                       </label>
                       <textarea
                         value={formData.bio}
                         onChange={(e) => setFormData({ ...formData, bio: e.target.value })}
                         rows={4}
-                        className="w-full px-4 py-2 bg-background-secondary border border-border-default rounded-lg text-text-primary focus:outline-none focus:ring-2 focus:ring-accent-primary resize-none"
+                        className="input-field resize-none"
                         placeholder="Tell us about yourself..."
                       />
                     </div>
 
                     <div>
-                      <label className="block text-sm font-medium text-text-secondary mb-2">
+                      <label className="block text-sm font-medium text-text-primary mb-2">
                         Website
                       </label>
                       <input
                         type="url"
                         value={formData.website}
                         onChange={(e) => setFormData({ ...formData, website: e.target.value })}
-                        className="w-full px-4 py-2 bg-background-secondary border border-border-default rounded-lg text-text-primary focus:outline-none focus:ring-2 focus:ring-accent-primary"
+                        className="input-field"
                         placeholder="https://yourwebsite.com"
                       />
                     </div>
@@ -258,57 +258,57 @@ export default function SettingsPage() {
                 </div>
 
                 {/* Social Links */}
-                <div className="card-elevated p-6">
+                <div className="card card-elevated p-6 rounded-2xl">
                   <h2 className="text-xl font-bold mb-4 text-text-primary">Social Links</h2>
                   <div className="space-y-4">
                     <div>
-                      <label className="block text-sm font-medium text-text-secondary mb-2">
+                      <label className="block text-sm font-medium text-text-primary mb-2">
                         Twitter / X
                       </label>
                       <input
                         type="text"
                         value={formData.socials.twitter}
                         onChange={(e) => setFormData({ ...formData, socials: { ...formData.socials, twitter: e.target.value } })}
-                        className="w-full px-4 py-2 bg-background-secondary border border-border-default rounded-lg text-text-primary focus:outline-none focus:ring-2 focus:ring-accent-primary"
+                        className="input-field"
                         placeholder="@username"
                       />
                     </div>
 
                     <div>
-                      <label className="block text-sm font-medium text-text-secondary mb-2">
+                      <label className="block text-sm font-medium text-text-primary mb-2">
                         Instagram
                       </label>
                       <input
                         type="text"
                         value={formData.socials.instagram}
                         onChange={(e) => setFormData({ ...formData, socials: { ...formData.socials, instagram: e.target.value } })}
-                        className="w-full px-4 py-2 bg-background-secondary border border-border-default rounded-lg text-text-primary focus:outline-none focus:ring-2 focus:ring-accent-primary"
+                        className="input-field"
                         placeholder="@username"
                       />
                     </div>
 
                     <div>
-                      <label className="block text-sm font-medium text-text-secondary mb-2">
+                      <label className="block text-sm font-medium text-text-primary mb-2">
                         LinkedIn
                       </label>
                       <input
                         type="text"
                         value={formData.socials.linkedin}
                         onChange={(e) => setFormData({ ...formData, socials: { ...formData.socials, linkedin: e.target.value } })}
-                        className="w-full px-4 py-2 bg-background-secondary border border-border-default rounded-lg text-text-primary focus:outline-none focus:ring-2 focus:ring-accent-primary"
+                        className="input-field"
                         placeholder="linkedin.com/in/username"
                       />
                     </div>
 
                     <div>
-                      <label className="block text-sm font-medium text-text-secondary mb-2">
+                      <label className="block text-sm font-medium text-text-primary mb-2">
                         IMDb
                       </label>
                       <input
                         type="text"
                         value={formData.socials.imdb}
                         onChange={(e) => setFormData({ ...formData, socials: { ...formData.socials, imdb: e.target.value } })}
-                        className="w-full px-4 py-2 bg-background-secondary border border-border-default rounded-lg text-text-primary focus:outline-none focus:ring-2 focus:ring-accent-primary"
+                        className="input-field"
                         placeholder="imdb.com/name/..."
                       />
                     </div>
@@ -320,8 +320,8 @@ export default function SettingsPage() {
                   <button
                     type="submit"
                     disabled={uploadingPhoto}
-                    className="px-6 py-3 bg-accent-primary text-white rounded-lg hover:bg-accent-hover transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
-                    style={{ color: 'rgb(var(--colored-button-text))' }}
+                    className="btn-primary px-6 py-3 disabled:opacity-50 disabled:cursor-not-allowed"
+                    style={{ color: 'rgb(var(--button-text-on-accent))' }}
                   >
                     {uploadingPhoto ? 'Saving...' : 'Save Changes'}
                   </button>
@@ -331,7 +331,7 @@ export default function SettingsPage() {
 
                 {/* Projects Sidebar */}
             <div className="lg:col-span-1">
-              <div className="card-elevated p-6 sticky top-8">
+              <div className="card card-elevated p-6 rounded-2xl sticky top-8">
                 <h2 className="text-xl font-bold mb-4 text-text-primary">My Projects</h2>
                 {profileLoading ? ( // Using profileLoading as general loading state for now
                   <div className="flex items-center justify-center py-8">

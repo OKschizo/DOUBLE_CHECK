@@ -7,6 +7,7 @@ import Link from 'next/link';
 import { useState, useEffect } from 'react';
 import { useThemeStore, themes, type ThemeId, darkModeAccents, type DarkModeAccent } from '@/lib/stores/themeStore';
 import { AccentColorIcons } from '@/lib/stores/themeIcons';
+import { useSidebarProject } from '@/lib/contexts/SidebarContext';
 import Image from 'next/image';
 
 interface DashboardLayoutProps {
@@ -29,6 +30,7 @@ export function DashboardLayout({ children, fullWidth = false }: DashboardLayout
   const [showDarkModeAccents, setShowDarkModeAccents] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const { currentTheme, setTheme, darkModeAccent, setDarkModeAccent } = useThemeStore();
+  const { project: sidebarProject } = useSidebarProject();
 
   useEffect(() => { setSidebarOpen(false); }, [pathname]);
 
@@ -65,7 +67,6 @@ export function DashboardLayout({ children, fullWidth = false }: DashboardLayout
         </div>
 
         <nav className="flex-1 overflow-y-auto py-4 px-3 space-y-1">
-          <p className="px-3 mb-2 text-[10px] font-semibold uppercase tracking-wider text-text-tertiary">Main</p>
           {navItems.map((item) => (
             <Link key={item.name} href={item.href} onClick={() => setSidebarOpen(false)}
               className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all ${
@@ -75,30 +76,30 @@ export function DashboardLayout({ children, fullWidth = false }: DashboardLayout
               {item.name}
             </Link>
           ))}
-
-          <div className="pt-6 mt-4 border-t border-border-subtle">
-            <p className="px-3 mb-2 text-[10px] font-semibold uppercase tracking-wider text-text-tertiary">Theme</p>
-            <div className="grid grid-cols-2 gap-2 px-2">
-              <button onClick={() => { setTheme('light'); setShowThemeMenu(false); setShowDarkModeAccents(false); }} className={`flex items-center justify-center gap-2 px-2 py-2 rounded-xl text-xs font-medium transition-all ${currentTheme === 'light' ? 'btn-grd-primary' : 'bg-background-tertiary text-text-secondary hover:text-text-primary'}`} style={currentTheme === 'light' ? { color: 'rgb(var(--button-text-on-accent))' } : undefined}>{themes.light.icon}<span>Light</span></button>
-              <button onClick={() => { setTheme('dark'); setShowDarkModeAccents(!showDarkModeAccents); }} className={`flex items-center justify-center gap-2 px-2 py-2 rounded-xl text-xs font-medium transition-all ${currentTheme === 'dark' ? 'btn-grd-primary' : 'bg-background-tertiary text-text-secondary hover:text-text-primary'}`} style={currentTheme === 'dark' ? { color: 'rgb(var(--colored-button-text))' } : undefined}>{themes.dark.icon}<span>Dark</span></button>
-            </div>
-            {showDarkModeAccents && currentTheme === 'dark' && (
-              <div className="mt-2 px-2 space-y-1">
-                {(Object.keys(darkModeAccents) as DarkModeAccent[]).map((accent) => (
-                  <button key={accent} onClick={() => setDarkModeAccent(accent)} className={`w-full flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs ${darkModeAccent === accent ? 'bg-accent-primary/15 text-accent-primary' : 'text-text-secondary hover:bg-background-tertiary'}`}>
-                    {AccentColorIcons[accent]}<span className="capitalize">{accent}</span>
-                  </button>
-                ))}
+          {sidebarProject && (
+            <>
+              <div className="my-3 border-t border-border-subtle" />
+              <div className="px-3 mb-2">
+                <Link href="/projects" className="text-xs text-text-tertiary hover:text-accent-primary transition-colors flex items-center gap-1">
+                  <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
+                  Projects
+                </Link>
+                <p className="text-sm font-semibold text-text-primary truncate mt-1" title={sidebarProject.projectTitle}>{sidebarProject.projectTitle}</p>
               </div>
-            )}
-            <div className="mt-2 px-2">
-              {Object.values(themes).filter(t => !['light','dark'].includes(t.id)).map((theme) => (
-                <button key={theme.id} onClick={() => { setTheme(theme.id); setShowDarkModeAccents(false); }} className={`w-full flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-medium ${currentTheme === theme.id ? 'bg-accent-primary/15 text-accent-primary' : 'text-text-secondary hover:bg-background-tertiary'}`}>
-                  {theme.icon}<span>{theme.name}</span>
+              {sidebarProject.items.map((item) => (
+                <button
+                  key={item.id}
+                  onClick={() => { sidebarProject.onNavigate(item.id); setSidebarOpen(false); }}
+                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all text-left ${
+                    sidebarProject.activeView === item.id ? 'bg-accent-primary/15 text-accent-primary' : 'text-text-secondary hover:text-text-primary hover:bg-background-tertiary'
+                  }`}
+                >
+                  <span className="w-4 h-4 shrink-0 flex items-center justify-center">{item.icon}</span>
+                  {item.name}
                 </button>
               ))}
-            </div>
-          </div>
+            </>
+          )}
         </nav>
       </aside>
 
@@ -119,6 +120,44 @@ export function DashboardLayout({ children, fullWidth = false }: DashboardLayout
             <button className="p-2 text-text-secondary hover:text-text-primary rounded-xl hover:bg-background-tertiary transition-colors" title="Notifications">
               <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" /></svg>
             </button>
+
+            {/* Theme switcher - top header */}
+            <div className="relative">
+              <button onClick={() => { setShowThemeMenu(!showThemeMenu); setShowDarkModeAccents(false); }} className="p-2 text-text-secondary hover:text-text-primary rounded-xl hover:bg-background-tertiary transition-colors" title="Change theme">
+                {themes[currentTheme].icon}
+              </button>
+              {showThemeMenu && (
+                <div className="absolute right-0 mt-2 w-64 bg-background-primary border border-border-default shadow-xl py-2 rounded-xl z-50 animate-in fade-in slide-in-from-top-2 duration-200">
+                  <div className="px-4 py-2 border-b border-border-subtle">
+                    <p className="text-xs font-semibold text-text-tertiary uppercase tracking-wider">Theme</p>
+                  </div>
+                  <div className="py-2 px-4">
+                    <div className="grid grid-cols-2 gap-2">
+                      <button onClick={() => { setTheme('light'); setShowThemeMenu(false); }} className={`flex items-center justify-center gap-2 px-3 py-2 rounded-xl text-sm font-medium transition-all ${currentTheme === 'light' ? 'btn-grd-primary' : 'bg-background-tertiary text-text-secondary hover:text-text-primary'}`} style={currentTheme === 'light' ? { color: 'rgb(var(--button-text-on-accent))' } : undefined}>{themes.light.icon}<span>Light</span></button>
+                      <button onClick={() => { setTheme('dark'); setShowDarkModeAccents(!showDarkModeAccents); }} className={`flex items-center justify-center gap-2 px-3 py-2 rounded-xl text-sm font-medium transition-all ${currentTheme === 'dark' ? 'btn-grd-primary' : 'bg-background-tertiary text-text-secondary hover:text-text-primary'}`} style={currentTheme === 'dark' ? { color: 'rgb(var(--colored-button-text))' } : undefined}>{themes.dark.icon}<span>Dark</span></button>
+                    </div>
+                    {showDarkModeAccents && currentTheme === 'dark' && (
+                      <div className="mt-2 pt-2 border-t border-border-subtle">
+                        <p className="text-xs text-text-tertiary mb-1">Accent</p>
+                        <div className="flex flex-wrap gap-1">
+                          {(Object.keys(darkModeAccents) as DarkModeAccent[]).map((accent) => (
+                            <button key={accent} onClick={() => setDarkModeAccent(accent)} className={`flex items-center gap-1.5 px-2 py-1 rounded-lg text-xs ${darkModeAccent === accent ? 'bg-accent-primary/15 text-accent-primary' : 'text-text-secondary hover:bg-background-tertiary'}`}>{AccentColorIcons[accent]}<span className="capitalize">{accent}</span></button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                  <div className="border-t border-border-subtle pt-2 px-4 pb-2">
+                    <p className="text-xs font-semibold text-text-tertiary uppercase tracking-wider mb-2">Presets</p>
+                    <div className="space-y-1">
+                      {Object.values(themes).filter(t => !['light','dark'].includes(t.id)).map((theme) => (
+                        <button key={theme.id} onClick={() => { setTheme(theme.id); setShowThemeMenu(false); }} className={`w-full flex items-center gap-2 px-3 py-2 rounded-xl text-sm font-medium ${currentTheme === theme.id ? 'bg-accent-primary/15 text-accent-primary' : 'text-text-secondary hover:bg-background-tertiary'}`}>{theme.icon}<span>{theme.name}</span></button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
 
             <div className="relative">
                 <button
@@ -194,12 +233,9 @@ export function DashboardLayout({ children, fullWidth = false }: DashboardLayout
         </main>
       </div>
 
-      {/* Click outside to close user dropdown */}
-      {showUserMenu && (
-        <div
-          className="fixed inset-0 z-40"
-          onClick={() => setShowUserMenu(false)}
-        />
+      {/* Click outside to close dropdowns */}
+      {(showUserMenu || showThemeMenu) && (
+        <div className="fixed inset-0 z-40" onClick={() => { setShowUserMenu(false); setShowThemeMenu(false); setShowDarkModeAccents(false); }} />
       )}
     </div>
   );
