@@ -108,8 +108,8 @@ export function DashboardLayout({ children, fullWidth = false }: DashboardLayout
 
       {/* Main wrapper */}
       <div className="flex-1 flex flex-col min-w-0">
-        {/* Header */}
-        <header className="sticky top-0 z-20 h-14 flex items-center justify-between px-4 lg:px-6 bg-background-primary/95 backdrop-blur-sm border-b border-border-subtle shrink-0">
+        {/* Header - z-50 when dropdown open so theme/user menus stay above the click-outside overlay */}
+        <header className={`sticky top-0 h-14 flex items-center justify-between px-4 lg:px-6 bg-background-primary/95 backdrop-blur-sm border-b border-border-subtle shrink-0 ${showUserMenu || showThemeMenu ? 'z-50' : 'z-20'}`}>
           <button onClick={() => setSidebarOpen(true)} className="lg:hidden p-2 text-text-secondary hover:text-text-primary rounded-xl hover:bg-background-tertiary" aria-label="Open menu">
             <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" /></svg>
           </button>
@@ -233,9 +233,9 @@ export function DashboardLayout({ children, fullWidth = false }: DashboardLayout
         </main>
       </div>
 
-      {/* Click outside to close dropdowns */}
+      {/* Click outside to close dropdowns - below header so dropdowns remain clickable */}
       {(showUserMenu || showThemeMenu) && (
-        <div className="fixed inset-0 z-40" onClick={() => { setShowUserMenu(false); setShowThemeMenu(false); setShowDarkModeAccents(false); }} />
+        <div className="fixed inset-0 z-30" onClick={() => { setShowUserMenu(false); setShowThemeMenu(false); setShowDarkModeAccents(false); }} />
       )}
     </div>
   );

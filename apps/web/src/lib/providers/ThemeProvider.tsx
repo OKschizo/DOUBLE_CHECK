@@ -42,12 +42,16 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     root.style.setProperty('--text-secondary', theme.colors.textSecondary);
     root.style.setProperty('--text-tertiary', theme.colors.textTertiary);
     
-    // Apply gradient overlay if theme has one
-    if (theme.gradient) {
-      root.style.setProperty('--theme-gradient', theme.gradient);
-    } else {
-      root.style.setProperty('--theme-gradient', 'none');
+    // Apply gradient overlay consistent with theme (Maxton-style)
+    let gradientValue = 'none';
+    if (currentTheme === 'dark') {
+      const accent = darkModeAccents[darkModeAccent];
+      const [r, g, b] = accent.accentPrimary.split(' ').map(Number);
+      gradientValue = `radial-gradient(ellipse 80% 50% at 20% 0%, rgba(${r}, ${g}, ${b}, 0.08), transparent 55%), radial-gradient(ellipse 60% 40% at 80% 100%, rgba(${r}, ${g}, ${b}, 0.05), transparent 50%)`;
+    } else if (theme.gradient) {
+      gradientValue = theme.gradient;
     }
+    root.style.setProperty('--theme-gradient', gradientValue);
     
     // Set button text color on accent background
     if (currentTheme === 'light') {
