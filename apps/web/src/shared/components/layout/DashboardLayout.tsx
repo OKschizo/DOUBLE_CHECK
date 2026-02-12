@@ -52,14 +52,9 @@ export function DashboardLayout({ children, fullWidth = false }: DashboardLayout
 
   return (
     <div className="min-h-screen flex bg-transparent relative">
-      {/* Theme gradient overlay - Maxton-style; sits behind sidebar and content */}
-      <div
-        className="fixed inset-0 z-0 pointer-events-none min-h-screen"
-        style={{ background: 'var(--theme-gradient, none)' }}
-        aria-hidden
-      />
-      {/* Sidebar - Maxton-style; slight transparency so theme gradient shows through */}
-      <aside className={`fixed lg:static inset-y-0 left-0 z-40 w-64 flex flex-col bg-background-secondary/95 backdrop-blur-sm border-r border-border-subtle transition-transform lg:translate-x-0 ${sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}`}>
+      {/* Sidebar - full height from top; logo at top of sidebar only; click outside dropdowns closes them */}
+      <aside className={`fixed lg:static inset-y-0 left-0 top-0 z-40 w-64 min-h-screen flex flex-col bg-background-secondary border-r border-border-subtle transition-transform lg:translate-x-0 ${sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}`} onClick={() => { if (showUserMenu || showThemeMenu) { setShowUserMenu(false); setShowThemeMenu(false); setShowDarkModeAccents(false); } }}>
+        {/* Logo at top of sidebar */}
         <div className="flex items-center justify-between h-14 px-4 border-b border-border-subtle shrink-0">
           <Link href="/dashboard" className="flex items-center gap-3 group">
             <div className="w-8 h-8 rounded-xl flex items-center justify-center overflow-hidden bg-background-elevated">
@@ -112,11 +107,17 @@ export function DashboardLayout({ children, fullWidth = false }: DashboardLayout
       {/* Overlay for mobile */}
       {sidebarOpen && <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-30 lg:hidden" onClick={() => setSidebarOpen(false)} aria-hidden="true" />}
 
-      {/* Main wrapper */}
+      {/* Main column only: gradient + header + content; header starts here (second column) */}
       <div className="flex-1 flex flex-col min-w-0 relative z-10">
-        {/* Header - z-50 when dropdown open so theme/user menus stay above the click-outside overlay */}
-        <header className={`sticky top-0 h-14 flex items-center justify-between px-4 lg:px-6 bg-background-primary/90 backdrop-blur-md border-b border-border-subtle shrink-0 ${showUserMenu || showThemeMenu ? 'z-50' : 'z-20'}`}>
-          <button onClick={() => setSidebarOpen(true)} className="lg:hidden p-2 text-text-secondary hover:text-text-primary rounded-xl hover:bg-background-tertiary" aria-label="Open menu">
+        {/* Gradient spans entire main column (header + content), not sidebar */}
+        <div
+          className="absolute inset-0 z-0 pointer-events-none min-h-full"
+          style={{ background: 'var(--theme-gradient, none)' }}
+          aria-hidden
+        />
+        {/* Header - second column only; no logo; click outside dropdowns closes them */}
+        <header className="sticky top-0 z-20 h-14 flex items-center justify-between px-4 lg:px-6 bg-background-primary/90 backdrop-blur-md border-b border-border-subtle shrink-0" onClick={() => { if (showUserMenu || showThemeMenu) { setShowUserMenu(false); setShowThemeMenu(false); setShowDarkModeAccents(false); } }}>
+          <button type="button" onClick={() => setSidebarOpen(true)} className="lg:hidden p-2 text-text-secondary hover:text-text-primary rounded-xl hover:bg-background-tertiary" aria-label="Open menu">
             <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" /></svg>
           </button>
 
@@ -127,27 +128,27 @@ export function DashboardLayout({ children, fullWidth = false }: DashboardLayout
               <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" /></svg>
             </button>
 
-            {/* Theme switcher - top header */}
-            <div className="relative">
-              <button onClick={() => { setShowThemeMenu(!showThemeMenu); setShowDarkModeAccents(false); }} className="p-2 text-text-secondary hover:text-text-primary rounded-xl hover:bg-background-tertiary transition-colors" title="Change theme">
+            {/* Theme switcher */}
+            <div className="relative" onClick={(e) => e.stopPropagation()}>
+              <button type="button" onClick={() => { setShowThemeMenu(!showThemeMenu); setShowDarkModeAccents(false); }} className="p-2 text-text-secondary hover:text-text-primary rounded-xl hover:bg-background-tertiary transition-colors" title="Change theme">
                 {themes[currentTheme].icon}
               </button>
               {showThemeMenu && (
-                <div className="absolute right-0 mt-2 w-64 bg-background-primary border border-border-default shadow-xl py-2 rounded-xl z-50 animate-in fade-in slide-in-from-top-2 duration-200">
+                <div className="absolute right-0 mt-2 w-64 bg-background-primary border border-border-default shadow-xl py-2 rounded-xl z-[100] animate-in fade-in slide-in-from-top-2 duration-200" onClick={(e) => e.stopPropagation()}>
                   <div className="px-4 py-2 border-b border-border-subtle">
                     <p className="text-xs font-semibold text-text-tertiary uppercase tracking-wider">Theme</p>
                   </div>
                   <div className="py-2 px-4">
                     <div className="grid grid-cols-2 gap-2">
-                      <button onClick={() => { setTheme('light'); setShowThemeMenu(false); }} className={`flex items-center justify-center gap-2 px-3 py-2 rounded-xl text-sm font-medium transition-all ${currentTheme === 'light' ? 'btn-grd-primary' : 'bg-background-tertiary text-text-secondary hover:text-text-primary'}`} style={currentTheme === 'light' ? { color: 'rgb(var(--button-text-on-accent))' } : undefined}>{themes.light.icon}<span>Light</span></button>
-                      <button onClick={() => { setTheme('dark'); setShowDarkModeAccents(!showDarkModeAccents); }} className={`flex items-center justify-center gap-2 px-3 py-2 rounded-xl text-sm font-medium transition-all ${currentTheme === 'dark' ? 'btn-grd-primary' : 'bg-background-tertiary text-text-secondary hover:text-text-primary'}`} style={currentTheme === 'dark' ? { color: 'rgb(var(--colored-button-text))' } : undefined}>{themes.dark.icon}<span>Dark</span></button>
+                      <button type="button" onClick={() => { setTheme('light'); setShowThemeMenu(false); }} className={`flex items-center justify-center gap-2 px-3 py-2 rounded-xl text-sm font-medium transition-all ${currentTheme === 'light' ? 'btn-grd-primary' : 'bg-background-tertiary text-text-secondary hover:text-text-primary'}`} style={currentTheme === 'light' ? { color: 'rgb(var(--button-text-on-accent))' } : undefined}>{themes.light.icon}<span>Light</span></button>
+                      <button type="button" onClick={() => { setTheme('dark'); setShowDarkModeAccents(!showDarkModeAccents); }} className={`flex items-center justify-center gap-2 px-3 py-2 rounded-xl text-sm font-medium transition-all ${currentTheme === 'dark' ? 'btn-grd-primary' : 'bg-background-tertiary text-text-secondary hover:text-text-primary'}`} style={currentTheme === 'dark' ? { color: 'rgb(var(--colored-button-text))' } : undefined}>{themes.dark.icon}<span>Dark</span></button>
                     </div>
                     {showDarkModeAccents && currentTheme === 'dark' && (
                       <div className="mt-2 pt-2 border-t border-border-subtle">
                         <p className="text-xs text-text-tertiary mb-1">Accent</p>
                         <div className="flex flex-wrap gap-1">
                           {(Object.keys(darkModeAccents) as DarkModeAccent[]).map((accent) => (
-                            <button key={accent} onClick={() => setDarkModeAccent(accent)} className={`flex items-center gap-1.5 px-2 py-1 rounded-lg text-xs ${darkModeAccent === accent ? 'bg-accent-primary/15 text-accent-primary' : 'text-text-secondary hover:bg-background-tertiary'}`}>{AccentColorIcons[accent]}<span className="capitalize">{accent}</span></button>
+                            <button type="button" key={accent} onClick={() => setDarkModeAccent(accent)} className={`flex items-center gap-1.5 px-2 py-1 rounded-lg text-xs ${darkModeAccent === accent ? 'bg-accent-primary/15 text-accent-primary' : 'text-text-secondary hover:bg-background-tertiary'}`}>{AccentColorIcons[accent]}<span className="capitalize">{accent}</span></button>
                           ))}
                         </div>
                       </div>
@@ -157,7 +158,7 @@ export function DashboardLayout({ children, fullWidth = false }: DashboardLayout
                     <p className="text-xs font-semibold text-text-tertiary uppercase tracking-wider mb-2">Presets</p>
                     <div className="space-y-1">
                       {Object.values(themes).filter(t => !['light','dark'].includes(t.id)).map((theme) => (
-                        <button key={theme.id} onClick={() => { setTheme(theme.id); setShowThemeMenu(false); }} className={`w-full flex items-center gap-2 px-3 py-2 rounded-xl text-sm font-medium ${currentTheme === theme.id ? 'bg-accent-primary/15 text-accent-primary' : 'text-text-secondary hover:bg-background-tertiary'}`}>{theme.icon}<span>{theme.name}</span></button>
+                        <button type="button" key={theme.id} onClick={() => { setTheme(theme.id); setShowThemeMenu(false); }} className={`w-full flex items-center gap-2 px-3 py-2 rounded-xl text-sm font-medium ${currentTheme === theme.id ? 'bg-accent-primary/15 text-accent-primary' : 'text-text-secondary hover:bg-background-tertiary'}`}>{theme.icon}<span>{theme.name}</span></button>
                       ))}
                     </div>
                   </div>
@@ -165,8 +166,9 @@ export function DashboardLayout({ children, fullWidth = false }: DashboardLayout
               )}
             </div>
 
-            <div className="relative">
+            <div className="relative" onClick={(e) => e.stopPropagation()}>
                 <button
+                  type="button"
                   onClick={() => setShowUserMenu(!showUserMenu)}
                   className="flex items-center gap-2 px-2 py-1.5 rounded-xl hover:bg-background-tertiary transition-colors"
                 >
@@ -186,7 +188,7 @@ export function DashboardLayout({ children, fullWidth = false }: DashboardLayout
 
                 {/* Dropdown Menu */}
                 {showUserMenu && (
-                  <div className="absolute right-0 mt-2 w-56 bg-background-primary border border-border-default shadow-xl py-2 rounded-xl animate-in fade-in slide-in-from-top-2 duration-200">
+                  <div className="absolute right-0 mt-2 w-56 bg-background-primary border border-border-default shadow-xl py-2 rounded-xl z-[100] animate-in fade-in slide-in-from-top-2 duration-200" onClick={(e) => e.stopPropagation()}>
                     <div className="px-4 py-3 border-b border-border-subtle">
                       <p className="text-sm font-medium text-text-primary truncate">
                         {user?.email}
@@ -233,16 +235,12 @@ export function DashboardLayout({ children, fullWidth = false }: DashboardLayout
           </div>
         </header>
 
-        {/* Main Content */}
-        <main className={`flex-1 ${fullWidth ? '' : 'max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 md:py-8'}`}>
+        {/* Main Content - above gradient; click outside dropdowns closes them */}
+        <main className={`flex-1 relative z-10 ${fullWidth ? '' : 'max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 md:py-8'}`} onClick={() => { if (showUserMenu || showThemeMenu) { setShowUserMenu(false); setShowThemeMenu(false); setShowDarkModeAccents(false); } }}>
           {children}
         </main>
       </div>
 
-      {/* Click outside to close dropdowns - below header so dropdowns remain clickable */}
-      {(showUserMenu || showThemeMenu) && (
-        <div className="fixed inset-0 z-30" onClick={() => { setShowUserMenu(false); setShowThemeMenu(false); setShowDarkModeAccents(false); }} />
-      )}
     </div>
   );
 }
