@@ -47,7 +47,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     if (currentTheme === 'dark') {
       const accent = darkModeAccents[darkModeAccent];
       const [r, g, b] = accent.accentPrimary.split(' ').map(Number);
-      gradientValue = `radial-gradient(ellipse 80% 50% at 20% 0%, rgba(${r}, ${g}, ${b}, 0.08), transparent 55%), radial-gradient(ellipse 60% 40% at 80% 100%, rgba(${r}, ${g}, ${b}, 0.05), transparent 50%)`;
+      gradientValue = `radial-gradient(ellipse 100% 70% at 10% 0%, rgba(${r}, ${g}, ${b}, 0.2), transparent 55%), radial-gradient(ellipse 80% 60% at 90% 100%, rgba(${r}, ${g}, ${b}, 0.12), transparent 50%)`;
     } else if (theme.gradient) {
       gradientValue = theme.gradient;
     }

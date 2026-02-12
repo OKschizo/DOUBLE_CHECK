@@ -91,7 +91,7 @@ export const themes: Record<ThemeId, Theme> = {
     id: 'dark',
     name: 'Dark Mode',
     icon: ThemeIcons.dark,
-    gradient: 'radial-gradient(ellipse 80% 50% at 20% 0%, rgba(181, 255, 0, 0.08), transparent 55%), radial-gradient(ellipse 60% 40% at 80% 100%, rgba(181, 255, 0, 0.05), transparent 50%)',
+    gradient: 'radial-gradient(ellipse 100% 70% at 10% 0%, rgba(181, 255, 0, 0.18), transparent 55%), radial-gradient(ellipse 80% 60% at 90% 100%, rgba(181, 255, 0, 0.1), transparent 50%)',
     colors: {
       backgroundPrimary: '0 0 0',
       backgroundSecondary: '0 0 0',
@@ -113,7 +113,7 @@ export const themes: Record<ThemeId, Theme> = {
     id: 'light',
     name: 'Light Mode',
     icon: ThemeIcons.light,
-    gradient: 'radial-gradient(ellipse 70% 50% at 10% 0%, rgba(0, 102, 255, 0.09), transparent 55%), radial-gradient(ellipse 60% 40% at 90% 100%, rgba(0, 102, 255, 0.06), transparent 50%)',
+    gradient: 'radial-gradient(ellipse 100% 70% at 10% 0%, rgba(0, 102, 255, 0.14), transparent 55%), radial-gradient(ellipse 80% 60% at 90% 100%, rgba(0, 102, 255, 0.08), transparent 50%)',
     colors: {
       backgroundPrimary: '255 255 255',
       backgroundSecondary: '249 250 251',
@@ -135,7 +135,7 @@ export const themes: Record<ThemeId, Theme> = {
     id: 'purple',
     name: 'Purple Nebula',
     icon: ThemeIcons.purple,
-    gradient: 'radial-gradient(ellipse 80% 50% at 20% 0%, rgba(124, 58, 237, 0.12), transparent 55%), radial-gradient(ellipse 60% 40% at 80% 100%, rgba(167, 139, 250, 0.08), transparent 50%)',
+    gradient: 'radial-gradient(ellipse 100% 70% at 15% 0%, rgba(124, 58, 237, 0.18), transparent 55%), radial-gradient(ellipse 80% 60% at 85% 100%, rgba(167, 139, 250, 0.1), transparent 50%)',
     colors: {
       backgroundPrimary: '11 13 20',
       backgroundSecondary: '19 21 31',
@@ -223,7 +223,7 @@ export const themes: Record<ThemeId, Theme> = {
     id: 'blue',
     name: 'Navy Blue',
     icon: ThemeIcons.blue,
-    gradient: 'radial-gradient(ellipse 80% 50% at 20% 0%, rgba(181, 255, 0, 0.08), transparent 55%), radial-gradient(ellipse 60% 40% at 80% 100%, rgba(218, 255, 128, 0.05), transparent 50%)',
+    gradient: 'radial-gradient(ellipse 100% 70% at 10% 0%, rgba(181, 255, 0, 0.16), transparent 55%), radial-gradient(ellipse 80% 60% at 90% 100%, rgba(218, 255, 128, 0.09), transparent 50%)',
     colors: {
       backgroundPrimary: '15 23 53',
       backgroundSecondary: '24 31 69',

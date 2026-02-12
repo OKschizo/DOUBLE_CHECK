@@ -51,9 +51,15 @@ export function DashboardLayout({ children, fullWidth = false }: DashboardLayout
   };
 
   return (
-    <div className="min-h-screen bg-background-primary flex">
-      {/* Sidebar - Maxton-style vertical menu */}
-      <aside className={`fixed lg:static inset-y-0 left-0 z-40 w-64 flex flex-col bg-background-secondary border-r border-border-subtle transition-transform lg:translate-x-0 ${sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}`}>
+    <div className="min-h-screen flex bg-transparent relative">
+      {/* Theme gradient overlay - Maxton-style; sits behind sidebar and content */}
+      <div
+        className="fixed inset-0 z-0 pointer-events-none min-h-screen"
+        style={{ background: 'var(--theme-gradient, none)' }}
+        aria-hidden
+      />
+      {/* Sidebar - Maxton-style; slight transparency so theme gradient shows through */}
+      <aside className={`fixed lg:static inset-y-0 left-0 z-40 w-64 flex flex-col bg-background-secondary/95 backdrop-blur-sm border-r border-border-subtle transition-transform lg:translate-x-0 ${sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}`}>
         <div className="flex items-center justify-between h-14 px-4 border-b border-border-subtle shrink-0">
           <Link href="/dashboard" className="flex items-center gap-3 group">
             <div className="w-8 h-8 rounded-xl flex items-center justify-center overflow-hidden bg-background-elevated">
@@ -107,9 +113,9 @@ export function DashboardLayout({ children, fullWidth = false }: DashboardLayout
       {sidebarOpen && <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-30 lg:hidden" onClick={() => setSidebarOpen(false)} aria-hidden="true" />}
 
       {/* Main wrapper */}
-      <div className="flex-1 flex flex-col min-w-0">
+      <div className="flex-1 flex flex-col min-w-0 relative z-10">
         {/* Header - z-50 when dropdown open so theme/user menus stay above the click-outside overlay */}
-        <header className={`sticky top-0 h-14 flex items-center justify-between px-4 lg:px-6 bg-background-primary/95 backdrop-blur-sm border-b border-border-subtle shrink-0 ${showUserMenu || showThemeMenu ? 'z-50' : 'z-20'}`}>
+        <header className={`sticky top-0 h-14 flex items-center justify-between px-4 lg:px-6 bg-background-primary/90 backdrop-blur-md border-b border-border-subtle shrink-0 ${showUserMenu || showThemeMenu ? 'z-50' : 'z-20'}`}>
           <button onClick={() => setSidebarOpen(true)} className="lg:hidden p-2 text-text-secondary hover:text-text-primary rounded-xl hover:bg-background-tertiary" aria-label="Open menu">
             <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" /></svg>
           </button>
