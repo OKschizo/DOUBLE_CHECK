@@ -149,9 +149,9 @@ export function EquipmentView({ projectId }: EquipmentViewProps) {
         projectId,
         name: formData.name,
         category: formData.category,
-        description: formData.description,
-        dailyRate: formData.dailyRate ? Number(formData.dailyRate) : undefined,
-        weeklyRate: formData.weeklyRate ? Number(formData.weeklyRate) : undefined,
+        description: formData.description || '',
+        dailyRate: formData.dailyRate ? Number(formData.dailyRate) : 0,
+        weeklyRate: formData.weeklyRate ? Number(formData.weeklyRate) : 0,
         quantity: Number(formData.quantity),
       });
       setShowAddForm(false);
@@ -162,6 +162,21 @@ export function EquipmentView({ projectId }: EquipmentViewProps) {
         dailyRate: '',
         weeklyRate: '',
         quantity: '1',
+        procurementStatus: 'needed',
+        source: 'rental',
+        daysNeeded: '',
+        reservedDate: '',
+        pickupDate: '',
+        returnDate: '',
+        rentalVendor: '',
+        vendorContact: '',
+        vendorPhone: '',
+        confirmationNumber: '',
+        responsiblePartyId: '',
+        responsibleDepartment: '',
+        assignedTo: [],
+        shootingDayIds: [],
+        notes: '',
       });
     } catch (error) {
       console.error(error);
@@ -498,6 +513,21 @@ export function EquipmentView({ projectId }: EquipmentViewProps) {
                         dailyRate: '',
                         weeklyRate: '',
                         quantity: '1',
+                        procurementStatus: 'needed',
+                        source: 'rental',
+                        daysNeeded: '',
+                        reservedDate: '',
+                        pickupDate: '',
+                        returnDate: '',
+                        rentalVendor: '',
+                        vendorContact: '',
+                        vendorPhone: '',
+                        confirmationNumber: '',
+                        responsiblePartyId: '',
+                        responsibleDepartment: '',
+                        assignedTo: [],
+                        shootingDayIds: [],
+                        notes: '',
                     });
                     setShowAddForm(true);
                 }} className="btn-primary">+ Add Item</button>
@@ -521,6 +551,21 @@ export function EquipmentView({ projectId }: EquipmentViewProps) {
                     dailyRate: '',
                     weeklyRate: '',
                     quantity: '1',
+                    procurementStatus: 'needed',
+                    source: 'rental',
+                    daysNeeded: '',
+                    reservedDate: '',
+                    pickupDate: '',
+                    returnDate: '',
+                    rentalVendor: '',
+                    vendorContact: '',
+                    vendorPhone: '',
+                    confirmationNumber: '',
+                    responsiblePartyId: '',
+                    responsibleDepartment: '',
+                    assignedTo: [],
+                    shootingDayIds: [],
+                    notes: '',
                 });
                 setShowAddForm(true);
               }} 
