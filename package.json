@@ -27,6 +27,15 @@
     "pnpm": ">=8.0.0"
   },
   "packageManager": "pnpm@10.15.1",
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "@firebase/util",
+      "core-js-pure",
+      "protobufjs",
+      "sharp",
+      "unrs-resolver"
+    ]
+  },
   "dependencies": {
     "superjson": "^2.2.5"
   }
