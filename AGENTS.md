@@ -33,6 +33,22 @@ See `package.json` scripts in root. Key commands:
 - Node engine warning: `.nvmrc` says 20 but Node 22 works fine; the root `engines` field requires `>=18`.
 - There is a stale `apps/web/package-lock.json` that triggers a Next.js warning about multiple lockfiles. It can be safely ignored.
 
-### No Test Framework
+### Testing
 
-This codebase has no automated test framework (no Jest, Vitest, Playwright, Cypress). Testing is limited to `pnpm lint` and `pnpm type-check`.
+**Unit tests** (Vitest + React Testing Library):
+```bash
+pnpm --filter web test       # run once
+pnpm --filter web test:watch # watch mode
+```
+Tests are in `apps/web/src/__tests__/`. Config: `apps/web/vitest.config.ts`.
+
+**E2E tests** (Playwright with Chromium):
+```bash
+pnpm test:e2e    # requires dev server running or auto-starts it
+```
+Tests are in `e2e/`. Config: `playwright.config.ts`. Playwright auto-starts the dev server if not already running.
+
+**All tests via Turborepo:**
+```bash
+pnpm test        # runs unit tests across all workspaces
+```
