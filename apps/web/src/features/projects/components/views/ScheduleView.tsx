@@ -93,6 +93,8 @@ export function ScheduleView({ projectId }: ScheduleViewProps) {
     if (template) {
       dayData.callTime = template.callTime;
       dayData.shootCall = template.shootCall;
+      if (template.lunchBreak) dayData.lunchBreak = template.lunchBreak;
+      if (template.wrapTime) dayData.wrapTime = template.wrapTime;
       dayData.notes = template.notes;
     }
     

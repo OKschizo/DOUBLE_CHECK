@@ -63,21 +63,24 @@ export function useCrewTemplates() {
           continue;
         }
         
-        await addDoc(collection(db, 'crew'), {
-          projectId,
-          name: position.name || '',
-          role: position.role,
-          department: position.department,
-          email: position.email || '',
-          phone: position.phone || '',
-          rate: position.rate || 0,
-          status: 'pending',
-          createdBy: user.id,
-          createdAt: serverTimestamp(),
-          updatedAt: serverTimestamp(),
-        });
-        
-        positionsCreated++;
+        const qty = position.quantity || 1;
+        for (let q = 0; q < qty; q++) {
+          await addDoc(collection(db, 'crew'), {
+            projectId,
+            name: position.name || position.role || '',
+            role: position.role,
+            department: position.department,
+            email: position.email || '',
+            phone: position.phone || '',
+            rate: position.defaultRate || position.rate || 0,
+            status: 'pending',
+            createdBy: user.id,
+            createdAt: serverTimestamp(),
+            updatedAt: serverTimestamp(),
+          });
+          
+          positionsCreated++;
+        }
       }
       
       setIsPending(false);
